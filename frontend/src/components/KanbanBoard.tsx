@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -13,16 +13,20 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { createId, moveCard, type BoardData } from "@/lib/kanban";
+import { CaseDialog } from "@/components/CaseDialog";
+import { ArchiveView } from "@/components/ArchiveView";
+import { createId, moveCard, type BoardData, type CaseInput } from "@/lib/kanban";
 
 type KanbanBoardProps = {
   board: BoardData;
-  setBoard: Dispatch<SetStateAction<BoardData>>;
+  updateBoard: (update: (prev: BoardData) => BoardData) => void;
   onLogout: () => void;
 };
 
-export const KanbanBoard = ({ board, setBoard, onLogout }: KanbanBoardProps) => {
+export const KanbanBoard = ({ board, updateBoard, onLogout }: KanbanBoardProps) => {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -44,14 +48,28 @@ export const KanbanBoard = ({ board, setBoard, onLogout }: KanbanBoardProps) => 
       return;
     }
 
-    setBoard((prev) => ({
-      ...prev,
-      columns: moveCard(prev.columns, active.id as string, over.id as string),
-    }));
+    const cardId = active.id as string;
+    updateBoard((prev) => {
+      const columns = moveCard(prev.columns, cardId, over.id as string);
+      const stageOf = (cols: BoardData["columns"]) =>
+        cols.find((column) => column.cardIds.includes(cardId))?.id;
+      if (stageOf(columns) === stageOf(prev.columns)) {
+        return { ...prev, columns };
+      }
+      // A stage move counts as an update to the case
+      return {
+        ...prev,
+        columns,
+        cards: {
+          ...prev.cards,
+          [cardId]: { ...prev.cards[cardId], updatedAt: new Date().toISOString() },
+        },
+      };
+    });
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
-    setBoard((prev) => ({
+    updateBoard((prev) => ({
       ...prev,
       columns: prev.columns.map((column) =>
         column.id === columnId ? { ...column, title } : column
@@ -59,13 +77,14 @@ export const KanbanBoard = ({ board, setBoard, onLogout }: KanbanBoardProps) => 
     }));
   };
 
-  const handleAddCard = (columnId: string, title: string, details: string) => {
+  const handleAddCard = (columnId: string, input: CaseInput) => {
     const id = createId("card");
-    setBoard((prev) => ({
+    const now = new Date().toISOString();
+    updateBoard((prev) => ({
       ...prev,
       cards: {
         ...prev.cards,
-        [id]: { id, title, details: details || "No details yet." },
+        [id]: { ...input, id, createdAt: now, updatedAt: now },
       },
       columns: prev.columns.map((column) =>
         column.id === columnId
@@ -75,36 +94,46 @@ export const KanbanBoard = ({ board, setBoard, onLogout }: KanbanBoardProps) => 
     }));
   };
 
-  const handleEditCard = (cardId: string, title: string, details: string) => {
-    setBoard((prev) => ({
+  const handleEditCard = (cardId: string, input: CaseInput) => {
+    updateBoard((prev) => ({
       ...prev,
       cards: {
         ...prev.cards,
-        [cardId]: { id: cardId, title, details: details || "No details yet." },
+        [cardId]: { ...prev.cards[cardId], ...input, updatedAt: new Date().toISOString() },
       },
     }));
   };
 
-  const handleDeleteCard = (columnId: string, cardId: string) => {
-    setBoard((prev) => {
-      return {
-        ...prev,
-        cards: Object.fromEntries(
-          Object.entries(prev.cards).filter(([id]) => id !== cardId)
-        ),
-        columns: prev.columns.map((column) =>
-          column.id === columnId
-            ? {
-                ...column,
-                cardIds: column.cardIds.filter((id) => id !== cardId),
-              }
-            : column
-        ),
-      };
-    });
+  const setArchivedAt = (cardId: string, archivedAt: string | null) => {
+    const now = new Date().toISOString();
+    updateBoard((prev) => ({
+      ...prev,
+      cards: {
+        ...prev.cards,
+        [cardId]: { ...prev.cards[cardId], archivedAt, updatedAt: now },
+      },
+    }));
+  };
+
+  const handleDeleteCard = (cardId: string) => {
+    updateBoard((prev) => ({
+      ...prev,
+      cards: Object.fromEntries(Object.entries(prev.cards).filter(([id]) => id !== cardId)),
+      columns: prev.columns.map((column) => ({
+        ...column,
+        cardIds: column.cardIds.filter((id) => id !== cardId),
+      })),
+    }));
   };
 
   const activeCard = activeCardId ? cardsById[activeCardId] : null;
+  const openCard = openCardId ? board.cards[openCardId] : null;
+  const openColumn = board.columns.find((column) => openCardId && column.cardIds.includes(openCardId));
+  const stageTitleOf = (cardId: string) =>
+    board.columns.find((column) => column.cardIds.includes(cardId))?.title ?? "";
+  const archivedCards = Object.values(board.cards)
+    .filter((card) => card.archivedAt)
+    .sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
 
   return (
     <div className="relative overflow-hidden">
@@ -137,6 +166,13 @@ export const KanbanBoard = ({ board, setBoard, onLogout }: KanbanBoardProps) => 
               </div>
               <button
                 type="button"
+                onClick={() => setShowArchive((prev) => !prev)}
+                className="rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--primary-blue)] transition hover:border-[var(--primary-blue)]"
+              >
+                {showArchive ? "Back to board" : `Archived (${archivedCards.length})`}
+              </button>
+              <button
+                type="button"
                 onClick={onLogout}
                 className="rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
               >
@@ -157,6 +193,14 @@ export const KanbanBoard = ({ board, setBoard, onLogout }: KanbanBoardProps) => 
           </div>
         </header>
 
+        {showArchive ? (
+          <ArchiveView
+            cards={archivedCards}
+            stageTitleOf={stageTitleOf}
+            onRestore={(cardId) => setArchivedAt(cardId, null)}
+            onDelete={handleDeleteCard}
+          />
+        ) : (
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -168,11 +212,12 @@ export const KanbanBoard = ({ board, setBoard, onLogout }: KanbanBoardProps) => 
               <KanbanColumn
                 key={column.id}
                 column={column}
-                cards={column.cardIds.map((cardId) => board.cards[cardId])}
+                cards={column.cardIds
+                  .map((cardId) => board.cards[cardId])
+                  .filter((card) => !card.archivedAt)}
                 onRename={handleRenameColumn}
                 onAddCard={handleAddCard}
-                onDeleteCard={handleDeleteCard}
-                onEditCard={handleEditCard}
+                onOpenCard={setOpenCardId}
               />
             ))}
           </section>
@@ -184,6 +229,20 @@ export const KanbanBoard = ({ board, setBoard, onLogout }: KanbanBoardProps) => 
             ) : null}
           </DragOverlay>
         </DndContext>
+        )}
+        {openCard && openColumn && (
+          <CaseDialog
+            key={openCard.id}
+            card={openCard}
+            stageTitle={openColumn.title}
+            onClose={() => setOpenCardId(null)}
+            onEdit={(input) => handleEditCard(openCard.id, input)}
+            onArchive={() => {
+              setArchivedAt(openCard.id, new Date().toISOString());
+              setOpenCardId(null);
+            }}
+          />
+        )}
       </main>
     </div>
   );

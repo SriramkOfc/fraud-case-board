@@ -21,34 +21,93 @@
   },
   "board_data": {
     "shape": {
-      "columns": [{ "id": "string", "title": "string", "cardIds": ["string"] }],
-      "cards": { "<cardId>": { "id": "string", "title": "string", "details": "string" } }
+      "columns": [
+        {
+          "id": "string",
+          "title": "string",
+          "cardIds": [
+            "string"
+          ]
+        }
+      ],
+      "cards": {
+        "<cardId>": {
+          "id": "string",
+          "title": "string",
+          "details": "string",
+          "customerName": "string",
+          "accountLast4": "string (4 digits)",
+          "amount": "number (USD, >= 0)",
+          "createdAt": "string (ISO 8601)",
+          "updatedAt": "string (ISO 8601)",
+          "archivedAt": "string (ISO 8601) | null"
+        }
+      }
     },
     "rules": [
       "columns are exactly col-alert, col-review, col-investigation, col-verification, col-decision, in that order",
       "column titles are free text (stages can be renamed)",
       "every card id in cards appears in exactly one column's cardIds, and every cardIds entry exists in cards",
       "each card's id matches its key in cards",
-      "card title is non-empty"
+      "card title is non-empty",
+      "customerName is non-empty",
+      "accountLast4 is exactly 4 digits (full account numbers are never stored)",
+      "amount is >= 0",
+      "createdAt and updatedAt are required",
+      "archivedAt is optional (null or missing = active). Archived cards stay in their column's cardIds and are hidden on the board"
     ],
     "example": {
       "columns": [
-        { "id": "col-alert", "title": "Alert Triggered", "cardIds": ["card-1"] },
-        { "id": "col-review", "title": "Review", "cardIds": [] },
-        { "id": "col-investigation", "title": "Investigation", "cardIds": ["card-5"] },
-        { "id": "col-verification", "title": "Verification", "cardIds": [] },
-        { "id": "col-decision", "title": "Decision", "cardIds": [] }
+        {
+          "id": "col-alert",
+          "title": "Alert Triggered",
+          "cardIds": [
+            "card-1"
+          ]
+        },
+        {
+          "id": "col-review",
+          "title": "Review",
+          "cardIds": []
+        },
+        {
+          "id": "col-investigation",
+          "title": "Investigation",
+          "cardIds": [
+            "card-5"
+          ]
+        },
+        {
+          "id": "col-verification",
+          "title": "Verification",
+          "cardIds": []
+        },
+        {
+          "id": "col-decision",
+          "title": "Decision",
+          "cardIds": []
+        }
       ],
       "cards": {
         "card-1": {
           "id": "card-1",
           "title": "Velocity rule: 14 card txns in 10 min",
-          "details": "Rule engine flagged rapid low-value card-not-present purchases. Auto-hold placed; assign to analyst queue by risk score."
+          "details": "Rule engine flagged rapid low-value card-not-present purchases. Auto-hold placed; assign to analyst queue by risk score.",
+          "customerName": "Daniel Okafor",
+          "accountLast4": "4821",
+          "amount": 1260.0,
+          "createdAt": "2026-11-16T08:42:00Z",
+          "updatedAt": "2026-11-16T08:42:00Z"
         },
         "card-5": {
           "id": "card-5",
           "title": "Account takeover - merchant #4471",
-          "details": "Pull device fingerprints, IP logs, and linked accounts. Trace fund flow and document timeline in case notes."
+          "details": "Pull device fingerprints, IP logs, and linked accounts. Trace fund flow and document timeline in case notes.",
+          "customerName": "Kestrel Home Supplies Pty Ltd",
+          "accountLast4": "1093",
+          "amount": 42300.0,
+          "createdAt": "2026-11-14T14:30:00Z",
+          "updatedAt": "2026-11-15T23:10:00Z"
         }
       }
     }

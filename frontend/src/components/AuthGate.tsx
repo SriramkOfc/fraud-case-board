@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { KanbanBoard } from "@/components/KanbanBoard";
+import { useSyncExternalStore } from "react";
+import { BoardPage } from "@/components/BoardPage";
 import { LoginForm } from "@/components/LoginForm";
 import {
   clearSessionUser,
@@ -9,11 +9,8 @@ import {
   setSessionUser,
   subscribeSession,
 } from "@/lib/auth";
-import { initialData, type BoardData } from "@/lib/kanban";
 
 export const AuthGate = () => {
-  // Board state lives here so it survives logout / login while the app stays open
-  const [board, setBoard] = useState<BoardData>(initialData);
   // undefined during the static (server) render, where sessionStorage does not exist
   const user = useSyncExternalStore(subscribeSession, getSessionUser, () => undefined);
 
@@ -25,5 +22,5 @@ export const AuthGate = () => {
     return <LoginForm onLogin={setSessionUser} />;
   }
 
-  return <KanbanBoard board={board} setBoard={setBoard} onLogout={clearSessionUser} />;
+  return <BoardPage username={user} onLogout={clearSessionUser} />;
 };

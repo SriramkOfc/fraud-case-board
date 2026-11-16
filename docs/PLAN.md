@@ -127,16 +127,63 @@ Success criteria: all backend tests pass; data persists across container restart
 
 ## Part 7: Frontend + Backend
 
-- [ ] `frontend/src/lib/api.ts` with `getBoard` and `saveBoard`
-- [ ] Board loads from the API after sign in (loading state while fetching)
-- [ ] Every change (rename stage, add / edit / delete / move case) saves the full board via PUT
-- [ ] Sample data in `kanban.ts` no longer used as the live source of truth (seed lives in the backend)
+- [x] `frontend/src/lib/api.ts` with `getBoard` and `saveBoard`
+- [x] `BoardPage` loads the board from the API after sign in ("Loading cases..." while fetching)
+- [x] Every change (rename stage, add / edit / delete / move case) updates state and saves the full board via PUT (`updateBoard(updater)` passed to `KanbanBoard`)
+- [x] Seed data removed from `kanban.ts`; the backend seed is the source of truth. Tests use a copy in `src/test/board.ts`
+- [x] Board state removed from `AuthGate` (persistence now comes from the database)
+- [x] Playwright resets the "user" board to the sample via the API before each test and runs with one worker
+- [x] `frontend/AGENTS.md` updated
 
 Tests:
-- Vitest with mocked fetch: board renders from API data; changes call `saveBoard` with the updated board
-- Playwright against the container: make changes, reload the page, changes persist; restart container, changes still persist
+- [x] Vitest: 19 passed (new `BoardPage.test.tsx` with an in-memory fetch stub: loading state then board from API, rename saves the whole board, add / edit / delete each save). Coverage 90.5% lines / 86.1% branches; `api.ts` and `BoardPage.tsx` 100%
+- [x] Playwright against the container: 10 passed (new: edit a case and rename a stage, reload, both persist; logout / login keeps added, edited and moved cases)
+- [x] Manual: case added in the browser, container stopped and started, case still on the board
 
-Success criteria: the fraud case board is fully persistent per user.
+Notes:
+- First restart check reported the case missing. Root cause was the check script: it counted cards right after sign in while the page still showed "Loading cases...". The host `data/app.db` contained the case. Waiting for the board to load showed it
+- Running the e2e suite resets the real "user" board to the sample cases
+- Each keystroke in a stage title saves the board. Fine for local SQLite; debounce if it ever matters
+
+Success criteria: the fraud case board is fully persistent per user. Met.
+
+## Part 7b: Richer fraud cases (added on request)
+
+- [x] New case fields: `customerName`, `accountLast4` (only last 4 digits stored), `amount` (USD at risk), `createdAt`, `updatedAt`
+- [x] Backend `Card` model validates them (non-empty customer, 4 digits, amount >= 0, timestamps required); seed cases given fictional customers, accounts, amounts and dates (backend seed and frontend test copy generated from one source)
+- [x] Frontend: shared `CaseForm` (add and edit) with visible captions; `CaseSummary` on cards and drag preview
+- [x] Cards show title, customer, amount and masked account only. Click or Enter opens a case window (modal) with all details (stage, customer, account, amount, created, last updated, notes) and Edit case / Delete case. Closes on Close, backdrop or Escape. (First version expanded the card in place; changed to a window on request)
+- [x] "Add a card" opens a "New case" window (shared `Modal` with the case window) instead of an inline form under the column; fields start empty
+- [x] Timestamps: add sets both, edit and cross-stage move set `updatedAt` (reorder within a stage does not)
+- [x] `docs/schema.json`, `docs/DATABASE.md`, frontend and backend AGENTS.md updated
+- [x] Existing `data/app.db` held only the untouched old sample (checked), so it was deleted and reseeded
+
+Tests:
+- [x] pytest: 23 passed, coverage 100% (new rejections: empty customer, full account number, non-digit account, negative amount, missing createdAt; seed fields checked)
+- [x] Vitest: 23 passed, coverage 92.2% lines (card shows essentials only, window opens on click / Enter with all details, closes three ways, edit and delete from the window, Escape after Save, new fields saved, edit keeps createdAt and bumps updatedAt)
+- [x] Playwright: 11 passed (add with all fields, edit / delete through the case window, stage move bumps `updatedAt`, non-4-digit account blocked)
+- [x] Visual check of the board, the case window and its edit form
+
+Notes:
+- Escape stopped closing the window after Save: the focused Save button unmounts, focus falls to `<body>`, and the dialog's own `onKeyDown` never fired (verified: `document.activeElement` was BODY). Fixed by listening for Escape on `window` while the window is open
+- Without visible captions, filled edit fields (for example "1093" and "42300") were ambiguous because placeholders disappear; captions added
+- Changing the board shape breaks existing stored boards (the backend rejects them on load). Fine while data is sample-only
+
+## Part 7c: Archive instead of delete (added on request)
+
+- [x] Requirement added to `AGENTS.md`: cases are archived, not deleted; an Archived page restores or permanently deletes them
+- [x] Data: optional `archivedAt` on cards (null / missing = active). Archived cases stay in their column's `cardIds`, so restore returns them to the same stage and position. No migration needed for existing boards
+- [x] Case window: "Delete case" replaced by "Archive case" (sets `archivedAt` and `updatedAt`)
+- [x] Header button "Archived (N)" switches to the Archived page ("Back to board" returns): archived cases newest first with stage and archive date; Restore; Delete permanently behind an inline confirm ("This cannot be undone")
+- [x] Board columns and counts exclude archived cases; counts read "1 case" / "N cases"
+- [x] `docs/schema.json`, `docs/DATABASE.md`, frontend and backend AGENTS.md updated
+
+Tests:
+- [x] pytest: 25 passed (archive / restore round trip keeps the card in its column; boards without `archivedAt` load as active)
+- [x] Vitest: 25 passed, coverage 93.5% lines (archive from window, hidden on board, Archived page lists with stage, restore returns to the same stage, permanent delete needs confirm and cancel keeps it)
+- [x] Playwright: 11 passed (archive survives reload, restore returns to Alert Triggered, permanent delete removes the case from the API)
+- [x] Existing stored board still loads after the model change (HTTP 200)
+- [x] Visual check of the board header and the Archived page
 
 ## Part 8: AI connectivity
 

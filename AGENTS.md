@@ -7,6 +7,7 @@ This project is building a Project Management App for fraud detection operations
 - When signed in, the user sees a Kanban board representing their fraud case pipeline
 - The Kanban board has fixed columns for the fraud workflow stages (Alert Triggered, Review, Investigation, Verification, Decision) that can be renamed
 - The cards on the Kanban board are fraud cases that can be moved between stages with drag and drop, and edited
+- Fraud cases are archived rather than deleted; a separate Archived page lists them so they can be restored to their stage or permanently deleted
 - There is an AI chat feature in a sidebar; the AI is able to create / edit / move one or more fraud cases
 
 ## Limitations

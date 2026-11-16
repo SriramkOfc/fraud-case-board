@@ -7,6 +7,12 @@ class Card(BaseModel):
     id: str
     title: str = Field(min_length=1)
     details: str
+    customerName: str = Field(min_length=1)
+    accountLast4: str = Field(pattern=r"^\d{4}$")  # only the last 4 digits are stored
+    amount: float = Field(ge=0)  # amount at risk, USD
+    createdAt: str  # ISO 8601, set by the client
+    updatedAt: str  # ISO 8601, set on create, edit, stage move, archive and restore
+    archivedAt: str | None = None  # ISO 8601 when archived; archived cases stay in their column, hidden on the board
 
 
 class Column(BaseModel):
