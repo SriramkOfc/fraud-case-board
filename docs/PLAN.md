@@ -89,9 +89,9 @@ Success criteria: board is not visible until signed in with "user" / "password";
 
 ## Part 5: Database modeling
 
-- [ ] `docs/schema.json`: proposed schema as JSON (tables, columns, types, constraints, example board document)
-- [ ] `docs/DATABASE.md`: short explanation of the approach (SQLite file, users + boards tables, board stored as JSON, seeding, validation)
-- [ ] User sign-off
+- [x] `docs/schema.json`: proposed schema as JSON (tables, columns, types, constraints, board rules, example board document)
+- [x] `docs/DATABASE.md`: short explanation of the approach (SQLite file, users + boards tables, board stored as JSON, seeding, validation, trade-offs)
+- [x] User sign-off (approved 2026-11-16, after DATABASE.md was reorganised by entity, ordering and data flow)
 
 Proposed tables:
 - `users(id INTEGER PK, username TEXT UNIQUE NOT NULL, created_at TEXT)`
@@ -101,20 +101,29 @@ Success criteria: user approves the schema.
 
 ## Part 6: Backend
 
-- [ ] On startup, create `data/app.db` and tables if missing
-- [ ] On first access for a username, create the user and seed the board with the five fraud stages and the sample fraud cases
-- [ ] Pydantic models for `BoardData` (columns, cards) with validation: exactly the five fixed stage ids in order, every card referenced exactly once
-- [ ] `GET /api/users/{username}/board` returns the board
-- [ ] `PUT /api/users/{username}/board` replaces the board after validation; 422 on invalid board
+- [x] On startup (FastAPI lifespan), create `data/app.db` and tables if missing
+- [x] On first access for a username, create the user and seed the board with the five fraud stages and the sample fraud cases (`app/seed.py`)
+- [x] Pydantic models for `BoardData` (`app/models.py`) with validation: exactly the five fixed stage ids in order, card ids match keys, every card referenced exactly once, non-empty titles
+- [x] `GET /api/users/{username}/board` returns the board
+- [x] `PUT /api/users/{username}/board` replaces the board after validation (upsert; creates the user if needed); 422 on invalid board
+- [x] `app/db.py` with stdlib `sqlite3`, `DB_PATH` overridable by env
+- [x] `backend/AGENTS.md` updated
 
-Tests (pytest, temporary DB per test):
-- DB file and tables are created when missing
-- First GET seeds the sample fraud board
-- PUT then GET round-trips: rename stage, add / edit / delete / move a case
-- Invalid boards rejected (missing stage, unknown card id, duplicate card)
-- Separate users get separate boards
+Tests (pytest, temporary DB per test): 18 passed, backend coverage 100%
+- [x] DB file (including missing parent folder) and tables are created on startup
+- [x] First GET seeds the sample fraud board; second GET does not reseed
+- [x] PUT then GET round-trips: rename stage, add / edit / delete / move a case, reorder within a stage
+- [x] PUT before any GET creates the user
+- [x] Invalid boards rejected with 422 and stored board unchanged (missing stage, reordered stages, unknown card id, duplicate card, orphan card, mismatched key, empty title)
+- [x] Separate users get separate boards
+- [x] Board persists across app restarts (two TestClient lifespans on the same DB)
+- [x] Container: `data/app.db` created on first start, board seeded, valid PUT 200, invalid PUT 422, change survives `stop.sh` + `start.sh`
 
-Success criteria: all backend tests pass; data persists across container restarts.
+Notes:
+- 52 `ResourceWarning: unclosed database` warnings on the first run. Root cause: `with sqlite3.connect(...)` only commits / rolls back, it does not close. `db.connect()` is now a context manager that commits and always closes; tests use `contextlib.closing`. Warnings gone
+- The seed board now exists in both `app/seed.py` and `frontend/src/lib/kanban.ts`; the frontend copy stops being the source of truth in Part 7
+
+Success criteria: all backend tests pass; data persists across container restarts. Met.
 
 ## Part 7: Frontend + Backend
 

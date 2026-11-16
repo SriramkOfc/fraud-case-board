@@ -1,0 +1,56 @@
+{
+  "database": "SQLite",
+  "file": "data/app.db",
+  "tables": {
+    "users": {
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "username": "TEXT NOT NULL UNIQUE",
+        "created_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
+      }
+    },
+    "boards": {
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "user_id": "INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE",
+        "data": "TEXT NOT NULL",
+        "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
+      },
+      "notes": "data holds the whole board as JSON (BoardData). user_id is UNIQUE: one board per user for the MVP."
+    }
+  },
+  "board_data": {
+    "shape": {
+      "columns": [{ "id": "string", "title": "string", "cardIds": ["string"] }],
+      "cards": { "<cardId>": { "id": "string", "title": "string", "details": "string" } }
+    },
+    "rules": [
+      "columns are exactly col-alert, col-review, col-investigation, col-verification, col-decision, in that order",
+      "column titles are free text (stages can be renamed)",
+      "every card id in cards appears in exactly one column's cardIds, and every cardIds entry exists in cards",
+      "each card's id matches its key in cards",
+      "card title is non-empty"
+    ],
+    "example": {
+      "columns": [
+        { "id": "col-alert", "title": "Alert Triggered", "cardIds": ["card-1"] },
+        { "id": "col-review", "title": "Review", "cardIds": [] },
+        { "id": "col-investigation", "title": "Investigation", "cardIds": ["card-5"] },
+        { "id": "col-verification", "title": "Verification", "cardIds": [] },
+        { "id": "col-decision", "title": "Decision", "cardIds": [] }
+      ],
+      "cards": {
+        "card-1": {
+          "id": "card-1",
+          "title": "Velocity rule: 14 card txns in 10 min",
+          "details": "Rule engine flagged rapid low-value card-not-present purchases. Auto-hold placed; assign to analyst queue by risk score."
+        },
+        "card-5": {
+          "id": "card-5",
+          "title": "Account takeover - merchant #4471",
+          "details": "Pull device fingerprints, IP logs, and linked accounts. Trace fund flow and document timeline in case notes."
+        }
+      }
+    }
+  }
+}
