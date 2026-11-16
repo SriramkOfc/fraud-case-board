@@ -174,3 +174,7 @@ cython_debug/
 
 .DS_Store
 
+
+# App data (SQLite)
+data/
+backend/static/

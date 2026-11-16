@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -13,10 +13,15 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+import { createId, moveCard, type BoardData } from "@/lib/kanban";
 
-export const KanbanBoard = () => {
-  const [board, setBoard] = useState<BoardData>(() => initialData);
+type KanbanBoardProps = {
+  board: BoardData;
+  setBoard: Dispatch<SetStateAction<BoardData>>;
+  onLogout: () => void;
+};
+
+export const KanbanBoard = ({ board, setBoard, onLogout }: KanbanBoardProps) => {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -70,6 +75,16 @@ export const KanbanBoard = () => {
     }));
   };
 
+  const handleEditCard = (cardId: string, title: string, details: string) => {
+    setBoard((prev) => ({
+      ...prev,
+      cards: {
+        ...prev.cards,
+        [cardId]: { id: cardId, title, details: details || "No details yet." },
+      },
+    }));
+  };
+
   const handleDeleteCard = (columnId: string, cardId: string) => {
     setBoard((prev) => {
       return {
@@ -101,23 +116,32 @@ export const KanbanBoard = () => {
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
-                Single Board Kanban
+                Fraud Operations
               </p>
               <h1 className="mt-3 font-display text-4xl font-semibold text-[var(--navy-dark)]">
-                Kanban Studio
+                Fraud Case Board
               </h1>
               <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--gray-text)]">
-                Keep momentum visible. Rename columns, drag cards between stages,
-                and capture quick notes without getting buried in settings.
+                Track every fraud alert from trigger to decision. Drag cases between
+                stages, rename stages, and capture investigation notes.
               </p>
             </div>
-            <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-                Focus
-              </p>
-              <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
-                One board. Five columns. Zero clutter.
-              </p>
+            <div className="flex items-start gap-4">
+              <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
+                  Focus
+                </p>
+                <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
+                  Alert to decision. Five stages.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onLogout}
+                className="rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
+              >
+                Log out
+              </button>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4">
@@ -148,6 +172,7 @@ export const KanbanBoard = () => {
                 onRename={handleRenameColumn}
                 onAddCard={handleAddCard}
                 onDeleteCard={handleDeleteCard}
+                onEditCard={handleEditCard}
               />
             ))}
           </section>

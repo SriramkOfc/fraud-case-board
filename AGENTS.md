@@ -1,19 +1,19 @@
-# The Project Management MVP web app
+# The Fraud Case Management MVP web app
 
 ## Business Requirements
 
-This project is building a Project Management App. Key features:
-- A user can sign in
-- When signed in, the user sees a Kanban board representing their project
-- The Kanban board has fixed columns that can be renamed
-- The cards on the Kanban board can be moved with drag and drop, and edited
-- There is an AI chat feature in a sidebar; the AI is able to create / edit / move one or more cards
+This project is building a Project Management App for fraud detection operations, where fraud alerts are tracked as cases from alert to decision. Key features:
+- A user (fraud analyst) can sign in
+- When signed in, the user sees a Kanban board representing their fraud case pipeline
+- The Kanban board has fixed columns for the fraud workflow stages (Alert Triggered, Review, Investigation, Verification, Decision) that can be renamed
+- The cards on the Kanban board are fraud cases that can be moved between stages with drag and drop, and edited
+- There is an AI chat feature in a sidebar; the AI is able to create / edit / move one or more fraud cases
 
 ## Limitations
 
 For the MVP, there will only be a user sign in (hardcoded to 'user' and 'password') but the database will support multiple users for future.
 
-For the MVP, there will only be 1 Kanban board per signed in user.
+For the MVP, there will only be 1 fraud case Kanban board per signed in user.
 
 For the MVP, this will run locally (in a docker container)
 
@@ -24,13 +24,13 @@ For the MVP, this will run locally (in a docker container)
 - Everything packaged into a Docker container
 - Use "uv" as the package manager for python in the Docker container
 - Use OpenRouter for the AI calls. An OPENROUTER_API_KEY is in .env in the project root
-- Use `openai/gpt-oss-120b` as the model
+- Use `openai/gpt-oss-120b:free` as the model (free OpenRouter variant)
 - Use SQLLite local database for the database, creating a new db if it doesn't exist
 - Start and Stop server scripts for Mac, PC, Linux in scripts/
 
 ## Starting Point
 
-A working MVP of the frontend has been built and is already in frontend. This is not yet designed for the Docker setup. It's a pure frontend-only demo.
+A working MVP of the frontend has been built and is already in frontend, themed as a fraud case board. This is not yet designed for the Docker setup. It's a pure frontend-only demo.
 
 ## Color Scheme
 
