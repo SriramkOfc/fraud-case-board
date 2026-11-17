@@ -1,15 +1,40 @@
 # High level steps for the fraud case management project
 
-The app is a fraud case board for a fraud analyst. Cases move through five fixed stages: Alert Triggered, Review, Investigation, Verification, Decision. Stages can be renamed but not added, removed, or reordered. Each case card has a title and details only.
+The app is a fraud case board for a fraud analyst. Cases move through five fixed stages: Alert Triggered, Review, Investigation, Verification, Decision. Stages can be renamed but not added, removed, or reordered. Each case has a title, case notes, customer name, account (last 4 digits only), amount at risk (USD), created and last-updated dates, and can be archived.
+
+## Status
+
+Parts 1-7 done, plus requested additions 7b (richer cases, case windows) and 7c (archive). Next: Part 8. Latest results: pytest 25 passed (100% backend coverage), Vitest 25 passed (93.5% lines), Playwright 11 passed.
 
 ## Architecture decisions
 
 - Single Docker container. Multi-stage build: Node stage runs `next build` with `output: "export"`; Python stage (uv) runs FastAPI with uvicorn on port 8000 and serves the exported site at `/` and the API at `/api/*`.
-- Database: SQLite file (free, no server) at `data/app.db`, mounted as a Docker volume so it survives restarts. Created on startup if missing.
+- Database: SQLite file (free, no server) at `data/app.db`, mounted as a Docker volume so it survives restarts. Created on startup if missing. Stdlib `sqlite3`, no ORM. Details in `docs/DATABASE.md` and `docs/schema.json`.
 - Storage model: a `users` table and a `boards` table. Each user's board is stored as one JSON document matching the frontend `BoardData` shape. No per-card tables: the board is always read and written whole, which keeps the API, the AI updates and the frontend in sync with the least code.
+- Ordering is array position: stage order is `columns`, case order within a stage is that column's `cardIds`. A case's stage is the column that lists it.
+- Seed: the backend (`backend/app/seed.py`) is the source of truth for the sample board given to new users. `frontend/src/test/board.ts` is a copy for tests and must be kept in sync.
+- Validation (Pydantic, on every save, 422 and nothing saved on failure): the five stage ids in order; every card in exactly one column, once; card ids match keys; non-empty title and customer; `accountLast4` exactly 4 digits; `amount` >= 0; `createdAt` / `updatedAt` present; `archivedAt` optional.
 - Sign in (MVP): frontend-only check of the hardcoded credentials, with the signed-in username held in `sessionStorage`. API routes take the username in the path. Server-side session cookies are suggested as a follow-up at the end (Part 11).
+- Saving: the frontend loads the board after sign in and saves the whole board (PUT) after every change.
 - AI: OpenRouter via the `openai` Python SDK with `base_url=https://openrouter.ai/api/v1`, model `openai/gpt-oss-120b:free` (free variant, rate limited). Chat history lives in frontend state and is sent with each request (not stored in the DB).
-- AI updates return the full board, which the backend validates (same five stage ids, every card id referenced exactly once) and saves.
+- AI updates return the full board, which the backend validates with the same rules and saves.
+
+## Product and UX decisions
+
+- Case fields: `customerName`, `accountLast4`, `amount`, `createdAt`, `updatedAt`, `archivedAt`, plus `title` and `details` (case notes). Only the last 4 account digits are ever stored (common card-data practice).
+- Timestamps: creating a case sets `createdAt` and `updatedAt`; editing, moving to another stage, archiving and restoring set `updatedAt`; reordering within a stage does not. Set by the frontend today; the backend will set them for AI changes (Part 9).
+- Archive instead of delete: archiving sets `archivedAt` and leaves the case in its column's `cardIds`, so restore returns it to the same stage and position. Archived cases are hidden on the board. Permanent deletion exists only on the Archived page, behind a confirm step.
+- Board cards are compact (title, customer, amount, masked account). Clicking a card (or Enter) opens a case window with all details and "Edit case" / "Archive case". "Add a card" opens a "New case" window for that stage. Both use one shared `Modal` (closes on Close, backdrop click or Escape).
+- Header: "Archived (N)" switches to the Archived page ("Back to board" returns); "Log out".
+- Colors follow the project scheme: purple for primary actions (Save, Add card, Edit case, Confirm delete), blue for amounts and links, yellow accents, navy headings, gray supporting text.
+
+## Testing approach
+
+- Backend: pytest with a temporary SQLite file per test, coverage 100%.
+- Frontend unit: Vitest + Testing Library; board API replaced by an in-memory `fetch` stub (`src/test/mockBackend.ts`). Coverage target about 80% where sensible, excluding `src/app`, `src/test` and test files.
+- E2E: Playwright against the running container (`scripts/start.sh` first). Each test resets the "user" board to the sample through the API and tests run with one worker, so running e2e resets your own "user" board.
+- Playwright browsers must be installed with Node 20 (the install hangs on Node 26; see Part 2 notes).
+- This plan is updated as work progresses.
 
 ## Part 1: Plan
 
@@ -47,7 +72,7 @@ Success criteria: container starts from a clean checkout with one command, hello
 - [x] Set `output: "export"` in `next.config.ts`
 - [x] Dockerfile gets a Node build stage (`node:24-slim`, `npm ci && npm run build`); exported `out/` copied to `/app/backend/static` and served by FastAPI at `/` (hello world page removed; `backend/static/` gitignored)
 - [x] `STATIC_DIR` env var (default `backend/static`) so backend tests use a temp dir with a stub `index.html` (`backend/tests/conftest.py`)
-- [x] Add card editing (title and details): Edit button opens an inline form with Save / Cancel
+- [x] Add card editing (title and details): Edit button opens an inline form with Save / Cancel (superseded in 7b: editing now happens in the case window)
 - [x] Fix test-global types so `tsc --noEmit` passes
 - [x] Point Playwright `baseURL` at the container (http://127.0.0.1:8000); removed the `next dev` webServer
 - [x] Coverage excludes `src/app`, `src/test` and test files; target about 80% where sensible
@@ -72,7 +97,7 @@ Success criteria: fraud case board is served from the container at `/`, all unit
 - [x] Signed-in username stored in `sessionStorage`; board shown when signed in (`AuthGate`)
 - [x] Logout button in the board header clears the session and returns to the login screen
 - [x] Error message on wrong credentials
-- [x] In-memory board persistence: board state lifted from `KanbanBoard` to `AuthGate`, so changes survive logout / login while the app stays open (a page reload still resets until Part 7)
+- [x] In-memory board persistence: board state lifted from `KanbanBoard` to `AuthGate`, so changes survive logout / login while the app stays open (superseded in Part 7: the database now persists the board)
 
 Tests:
 - [x] Vitest: 16 passed (new `AuthGate.test.tsx`: login form shown when signed out, valid login, invalid login message, session kept, logout, board changes kept after logout / login). Coverage 91.0% lines / 85.0% branches
@@ -121,7 +146,7 @@ Tests (pytest, temporary DB per test): 18 passed, backend coverage 100%
 
 Notes:
 - 52 `ResourceWarning: unclosed database` warnings on the first run. Root cause: `with sqlite3.connect(...)` only commits / rolls back, it does not close. `db.connect()` is now a context manager that commits and always closes; tests use `contextlib.closing`. Warnings gone
-- The seed board now exists in both `app/seed.py` and `frontend/src/lib/kanban.ts`; the frontend copy stops being the source of truth in Part 7
+- The seed board then existed in both `app/seed.py` and `frontend/src/lib/kanban.ts`; resolved in Part 7 (backend seed is the source of truth, frontend keeps a test copy)
 
 Success criteria: all backend tests pass; data persists across container restarts. Met.
 
@@ -152,7 +177,7 @@ Success criteria: the fraud case board is fully persistent per user. Met.
 - [x] New case fields: `customerName`, `accountLast4` (only last 4 digits stored), `amount` (USD at risk), `createdAt`, `updatedAt`
 - [x] Backend `Card` model validates them (non-empty customer, 4 digits, amount >= 0, timestamps required); seed cases given fictional customers, accounts, amounts and dates (backend seed and frontend test copy generated from one source)
 - [x] Frontend: shared `CaseForm` (add and edit) with visible captions; `CaseSummary` on cards and drag preview
-- [x] Cards show title, customer, amount and masked account only. Click or Enter opens a case window (modal) with all details (stage, customer, account, amount, created, last updated, notes) and Edit case / Delete case. Closes on Close, backdrop or Escape. (First version expanded the card in place; changed to a window on request)
+- [x] Cards show title, customer, amount and masked account only. Click or Enter opens a case window (modal) with all details (stage, customer, account, amount, created, last updated, notes) and Edit case / Delete case (Delete later replaced by Archive in 7c). Closes on Close, backdrop or Escape. (First version expanded the card in place; changed to a window on request)
 - [x] "Add a card" opens a "New case" window (shared `Modal` with the case window) instead of an inline form under the column; fields start empty
 - [x] Timestamps: add sets both, edit and cross-stage move set `updatedAt` (reorder within a stage does not)
 - [x] `docs/schema.json`, `docs/DATABASE.md`, frontend and backend AGENTS.md updated
@@ -169,6 +194,8 @@ Notes:
 - Without visible captions, filled edit fields (for example "1093" and "42300") were ambiguous because placeholders disappear; captions added
 - Changing the board shape breaks existing stored boards (the backend rejects them on load). Fine while data is sample-only
 
+Success criteria: each case shows customer, masked account, amount and dates; cases open in a window for viewing and editing; new cases are added through a window. Met.
+
 ## Part 7c: Archive instead of delete (added on request)
 
 - [x] Requirement added to `AGENTS.md`: cases are archived, not deleted; an Archived page restores or permanently deletes them
@@ -184,6 +211,8 @@ Tests:
 - [x] Playwright: 11 passed (archive survives reload, restore returns to Alert Triggered, permanent delete removes the case from the API)
 - [x] Existing stored board still loads after the model change (HTTP 200)
 - [x] Visual check of the board header and the Archived page
+
+Success criteria: no case can be deleted from the board directly; archived cases are hidden, listed on the Archived page, restorable to their stage, and permanently deletable only after confirming. Met.
 
 ## Part 8: AI connectivity
 
@@ -203,11 +232,16 @@ Success criteria: a real OpenRouter call succeeds from inside the container.
 - [ ] Fraud-aware system prompt: the AI acts as a fraud operations assistant; it knows what each stage means and the normal work in it (alert triage and holds; review for false positives and duplicates; investigation of devices, IPs, linked accounts and fund flow; customer and KYC verification; decision outcomes such as block and reissue, chargeback, SAR filing, release hold, rule tuning); it uses fraud terminology, suggests sensible next steps, writes case details as concise analyst notes, and does not invent real customer personal data
 - [ ] Structured output schema: `{ "reply": string, "board": BoardData | null }`
 - [ ] If `board` is returned, validate with the Part 6 rules and save; response returns `reply` and the saved board (or null)
+- [ ] The AI works with all case fields (customer, account last 4, amount, notes) and invents only clearly fictional customer data when asked to create cases
+- [ ] The AI archives (sets `archivedAt`) instead of deleting: a returned board that drops existing cases is rejected and nothing is saved
+- [ ] The backend sets timestamps for AI changes by comparing with the stored board: new cases get `createdAt` = `updatedAt` = now; changed, moved, archived or restored cases get `updatedAt` = now (model-provided timestamps are not trusted)
 
 Tests (pytest, AI client mocked):
 - Reply only: board unchanged
 - Reply with board update (create, edit, move multiple cases): board saved
 - Invalid AI board rejected, existing board unchanged
+- AI board that removes a case rejected; archiving through the AI works
+- Timestamps set by the backend for new and changed cases, untouched for unchanged cases
 - History is passed through to the model
 - Live test (skipped when no key): asking to "move the geo-mismatch case to Investigation" moves that card
 
@@ -217,7 +251,7 @@ Success criteria: the AI can reliably create, edit and move one or more fraud ca
 
 - [ ] Sidebar on the board page: message list, input, send button (purple), loading state
 - [ ] Conversation history kept in component state and sent with each message
-- [ ] When the response includes a board, the board updates immediately without a reload
+- [ ] When the response includes a board, the board (and the Archived count / page) updates immediately without a reload
 - [ ] Styled with the project color scheme
 
 Tests:
@@ -226,6 +260,14 @@ Tests:
 
 Success criteria: an analyst can chat with the AI and see fraud cases created, edited and moved on the board automatically.
 
-## Part 11: Follow-up suggestion
+## Part 11: Follow-up suggestions
 
 - [ ] Suggest replacing the frontend-only sign in with a backend login route and an HTTP-only session cookie, so API routes identify the user from the session instead of the URL
+
+Known limitations to mention alongside (not planned work):
+- Each keystroke in a stage title saves the whole board; debounce if it matters
+- Two simultaneous edits to one board: last save wins
+- No migration tooling: changing the board shape needs stored boards migrated or reset
+- Backend seed and frontend test copy must be kept in sync by hand
+- PowerShell start / stop scripts are untested (no Windows machine)
+- `httpx` deprecation warning in backend tests (Starlette suggests `httpx2`; not installed because it could not be verified)
