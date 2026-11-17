@@ -2,7 +2,7 @@
 
 A case board for fraud analysts. Alerts move through five stages, from Alert Triggered to Decision. An AI copilot proposes case changes, an analyst approves them, and every change lands in an append-only audit trail.
 
-**Live demo:** https://sriramkofc-fraud-case-board.hf.space (login `user` / `password`, all data is fictional)
+**Live demo:** https://fraud-case-board.onrender.com (login `user` / `password`, all data is fictional; the free server can take up to a minute to wake up)
 
 ## What it does
 

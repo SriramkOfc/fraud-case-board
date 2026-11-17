@@ -18,7 +18,7 @@ For the MVP, there will only be a user sign in (hardcoded to 'user' and 'passwor
 
 For the MVP, there will only be 1 fraud case Kanban board per signed in user.
 
-For the MVP, this will run locally (in a docker container). A public demo of the same container runs on Hugging Face Spaces (see docs/PLAN.md Part 11)
+For the MVP, this will run locally (in a docker container). A public demo of the same container runs on Render (see docs/PLAN.md Part 11)
 
 ## Technical Decisions
 
