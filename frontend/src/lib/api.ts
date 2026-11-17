@@ -14,3 +14,21 @@ export const saveBoard = async (username: string, board: BoardData) => {
     body: JSON.stringify(board),
   });
 };
+
+export type ChatMessage = { role: "user" | "assistant"; content: string };
+
+export const sendChat = async (
+  username: string,
+  message: string,
+  history: ChatMessage[]
+): Promise<{ reply: string; board: BoardData | null }> => {
+  const response = await fetch(`/api/users/${encodeURIComponent(username)}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, history }),
+  });
+  if (!response.ok) {
+    throw new Error(`Chat failed: ${response.status}`);
+  }
+  return response.json();
+};

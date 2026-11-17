@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChatSidebar } from "@/components/ChatSidebar";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { getBoard, saveBoard } from "@/lib/api";
 import type { BoardData } from "@/lib/kanban";
@@ -30,5 +31,11 @@ export const BoardPage = ({ username, onLogout }: BoardPageProps) => {
     saveBoard(username, next);
   };
 
-  return <KanbanBoard board={board} updateBoard={updateBoard} onLogout={onLogout} />;
+  // The backend has already saved boards returned by the AI, so they only update the screen
+  return (
+    <>
+      <KanbanBoard board={board} updateBoard={updateBoard} onLogout={onLogout} />
+      <ChatSidebar username={username} onBoard={setBoard} />
+    </>
+  );
 };

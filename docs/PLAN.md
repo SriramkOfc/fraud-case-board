@@ -4,7 +4,7 @@ The app is a fraud case board for a fraud analyst. Cases move through five fixed
 
 ## Status
 
-Parts 1-9 done, plus requested additions 7b (richer cases, case windows) and 7c (archive). Next: Part 10. Latest results: pytest 36 passed including the live AI calls (100% backend coverage), Vitest 25 passed (93.5% lines), Playwright 11 passed.
+All parts (1-10) done, plus requested additions 7b (richer cases, case windows) and 7c (archive). Latest results: pytest 36 passed including the live AI calls (100% backend coverage), Vitest 30 passed (94.4% lines), Playwright 12 passed including the live AI test.
 
 ## Architecture decisions
 
@@ -14,7 +14,7 @@ Parts 1-9 done, plus requested additions 7b (richer cases, case windows) and 7c 
 - Ordering is array position: stage order is `columns`, case order within a stage is that column's `cardIds`. A case's stage is the column that lists it.
 - Seed: the backend (`backend/app/seed.py`) is the source of truth for the sample board given to new users. `frontend/src/test/board.ts` is a copy for tests and must be kept in sync.
 - Validation (Pydantic, on every save, 422 and nothing saved on failure): the five stage ids in order; every card in exactly one column, once; card ids match keys; non-empty title and customer; `accountLast4` exactly 4 digits; `amount` >= 0; `createdAt` / `updatedAt` present; `archivedAt` optional.
-- Sign in (MVP): frontend-only check of the hardcoded credentials, with the signed-in username held in `sessionStorage`. API routes take the username in the path. Server-side session cookies are suggested as a follow-up at the end (Part 11).
+- Sign in (MVP): frontend-only check of the hardcoded credentials, with the signed-in username held in `sessionStorage`. API routes take the username in the path.
 - Saving: the frontend loads the board after sign in and saves the whole board (PUT) after every change.
 - AI: OpenRouter via the `openai` Python SDK with `base_url=https://openrouter.ai/api/v1`, model `nvidia/nemotron-3.5-super-vl:free` (free, rate limited, supports structured outputs). Originally `openai/gpt-oss-120b:free`, which OpenRouter withdrew (see Part 8). Chat history lives in frontend state and is sent with each request (not stored in the DB).
 - AI updates return the full board, which the backend validates with the same rules and saves.
@@ -265,25 +265,20 @@ Success criteria: the AI can reliably create, edit and move one or more fraud ca
 
 ## Part 10: AI chat sidebar
 
-- [ ] Sidebar on the board page: message list, input, send button (purple), loading state
-- [ ] Conversation history kept in component state and sent with each message
-- [ ] When the response includes a board, the board (and the Archived count / page) updates immediately without a reload
-- [ ] Styled with the project color scheme
+- [x] Sidebar on the board page (`ChatSidebar`): message list, input, send button (purple), loading state ("Thinking...", Send disabled), error line on failure
+- [x] Opened from a fixed "AI assistant" button and slides over the right edge, with Close. Stays mounted when closed, so the conversation is kept
+- [x] Conversation history kept in component state and sent with each message
+- [x] When the response includes a board, the board (and the Archived count / page) updates immediately without a reload. It is only set in state: the backend already saved it
+- [x] Styled with the project color scheme (navy user bubbles, yellow accent line, purple Send and toggle, blue loading text)
 
 Tests:
-- Vitest with mocked API: sending a message shows reply; board update from the AI re-renders the board
-- Playwright (live, skipped without key): ask the AI to create a case in Alert Triggered; card appears
+- [x] Vitest (`ChatSidebar.test.tsx`, chat handler added to `mockBackend`): reply shown and history sent; open / close keeps the conversation; loading state and empty messages ignored; AI board creates, moves and archives cases on screen and updates "Archived (1)" without a PUT; error message on 502. 30 passed, 94.4% lines, `ChatSidebar.tsx` 100%
+- [x] Playwright (`chat.spec.ts`, live; runs without extra steps because the container has the key): AI creates "SIM swap alert" in Alert Triggered, card appears, still there after reload. 12 passed
+- [x] Visual check at 1440x900: panel closed and open after a live request (moved geo-mismatch, archived the false positive)
 
-Success criteria: an analyst can chat with the AI and see fraud cases created, edited and moved on the board automatically.
+Notes:
+- The first version put the sidebar beside the board. The existing e2e test "keeps added, edited and moved cases after logging out" then failed. Root cause (measured): at 1280px the five columns shrank to about 150px, cards grew to 234px tall, the page scrolled, and the test's drop point (column top + 120px) landed above the Investigation column. The same squeeze made the board hard to read on laptop screens, so the sidebar now overlays the board instead of narrowing it
+- The "AI assistant" button can sit over the corner of the Decision "Add a card" button when the board fits the screen; the rest of that button stays clickable
+- If the analyst edits the board while an AI request is running, the AI's board (based on the earlier state) wins
 
-## Part 11: Follow-up suggestions
-
-- [ ] Suggest replacing the frontend-only sign in with a backend login route and an HTTP-only session cookie, so API routes identify the user from the session instead of the URL
-
-Known limitations to mention alongside (not planned work):
-- Each keystroke in a stage title saves the whole board; debounce if it matters
-- Two simultaneous edits to one board: last save wins
-- No migration tooling: changing the board shape needs stored boards migrated or reset
-- Backend seed and frontend test copy must be kept in sync by hand
-- PowerShell start / stop scripts are untested (no Windows machine)
-- `httpx` deprecation warning in backend tests (Starlette suggests `httpx2`; not installed because it could not be verified)
+Success criteria: an analyst can chat with the AI and see fraud cases created, edited and moved on the board automatically. Met.
