@@ -32,7 +32,7 @@ export const ChatSidebar = ({ username, onBoard }: ChatSidebarProps) => {
     setError(false);
     setLoading(true);
     try {
-      const result = await sendChat(username, message, history);
+      const result = await sendChat(username, message, history.slice(-20));
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: result.reply },

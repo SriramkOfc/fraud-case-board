@@ -21,3 +21,18 @@ export const clearSessionUser = () => {
   sessionStorage.removeItem(SESSION_KEY);
   listeners.forEach((listener) => listener());
 };
+
+// Hosted demo (built with NEXT_PUBLIC_DEMO=1): each browser gets its own board, so visitors don't overwrite each other
+export const isDemo = process.env.NEXT_PUBLIC_DEMO === "1";
+
+export const boardOwner = (username: string) => {
+  if (!isDemo) {
+    return username;
+  }
+  let id = localStorage.getItem("fraud-board-visitor");
+  if (!id) {
+    id = crypto.randomUUID().slice(0, 8);
+    localStorage.setItem("fraud-board-visitor", id);
+  }
+  return `${username}-${id}`;
+};

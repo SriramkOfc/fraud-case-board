@@ -3,6 +3,9 @@ WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# Set to 1 for the hosted demo (per-browser boards, login hint)
+ARG NEXT_PUBLIC_DEMO=""
+ENV NEXT_PUBLIC_DEMO=$NEXT_PUBLIC_DEMO
 RUN npm run build
 
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
@@ -15,5 +18,8 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY backend/ ./
 COPY --from=frontend /frontend/out ./static
 
+# Writable data dir so the app also runs as a non-root user (e.g. on Hugging Face Spaces)
+RUN mkdir -p /app/data && chmod 777 /app/data
+
 EXPOSE 8000
-CMD ["uv", "run", "--no-dev", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

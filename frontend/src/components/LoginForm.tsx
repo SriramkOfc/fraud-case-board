@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { checkCredentials } from "@/lib/auth";
+import { checkCredentials, isDemo } from "@/lib/auth";
 
 type LoginFormProps = {
   onLogin: (username: string) => void;
@@ -59,6 +59,12 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         {error && (
           <p role="alert" className="text-sm text-[var(--secondary-purple)]">
             Invalid username or password.
+          </p>
+        )}
+        {isDemo && (
+          <p className="text-sm text-[var(--gray-text)]">
+            Demo login: <span className="font-semibold text-[var(--navy-dark)]">user</span> /{" "}
+            <span className="font-semibold text-[var(--navy-dark)]">password</span>. Data is fictional.
           </p>
         )}
         <button

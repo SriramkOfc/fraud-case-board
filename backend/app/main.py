@@ -3,9 +3,11 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from typing import Annotated
+
+from fastapi import FastAPI, HTTPException, Path as PathParam
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import ai, db
 from app.models import BoardData
@@ -13,9 +15,13 @@ from app.models import BoardData
 STATIC_DIR = Path(os.environ.get("STATIC_DIR", Path(__file__).resolve().parent.parent / "static"))
 
 
+# Public demo: bound what a visitor can send
+Username = Annotated[str, PathParam(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
+
+
 class ChatRequest(BaseModel):
-    message: str
-    history: list[ai.ChatMessage] = []
+    message: str = Field(min_length=1, max_length=2000)
+    history: list[ai.ChatMessage] = Field(default=[], max_length=20)
 
 
 @asynccontextmanager
@@ -38,19 +44,18 @@ def ai_test() -> dict[str, str]:
 
 
 @app.get("/api/users/{username}/board")
-def read_board(username: str) -> BoardData:
+def read_board(username: Username) -> BoardData:
     return db.get_board(username)
 
 
 @app.put("/api/users/{username}/board")
-def update_board(username: str, board: BoardData) -> BoardData:
+def update_board(username: Username, board: BoardData) -> BoardData:
     db.save_board(username, board)
     return board
 
 
-
 @app.post("/api/users/{username}/chat")
-def chat(username: str, request: ChatRequest) -> ai.ChatReply:
+def chat(username: Username, request: ChatRequest) -> ai.ChatReply:
     board = db.get_board(username)
     try:
         result = ai.chat(board, request.history, request.message)

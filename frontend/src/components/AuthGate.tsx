@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { BoardPage } from "@/components/BoardPage";
 import { LoginForm } from "@/components/LoginForm";
 import {
+  boardOwner,
   clearSessionUser,
   getSessionUser,
   setSessionUser,
@@ -22,5 +23,5 @@ export const AuthGate = () => {
     return <LoginForm onLogin={setSessionUser} />;
   }
 
-  return <BoardPage username={user} onLogout={clearSessionUser} />;
+  return <BoardPage username={boardOwner(user)} onLogout={clearSessionUser} />;
 };

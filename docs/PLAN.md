@@ -282,3 +282,13 @@ Notes:
 - If the analyst edits the board while an AI request is running, the AI's board (based on the earlier state) wins
 
 Success criteria: an analyst can chat with the AI and see fraud cases created, edited and moved on the board automatically. Met.
+
+## Part 11: Public demo hosting (added on request)
+
+- [x] Hosted free on Hugging Face Spaces (Docker): https://sriramkofc-fraud-case-board.hf.space. `OPENROUTER_API_KEY` is a Space secret; the SQLite file is not persistent there, so boards reset when the Space restarts
+- [x] Build flag `NEXT_PUBLIC_DEMO=1` (Space variable, passed as a Docker build arg): each browser gets its own board (`user-<visitor id>`, kept in `localStorage`) so visitors don't overwrite each other, and the login screen shows the demo credentials
+- [x] Public input limits: username path `^[A-Za-z0-9_-]{1,64}$`, chat message up to 2000 characters, history up to 20 messages of 4000 characters (the sidebar sends the last 20)
+- [x] Dockerfile: writable `/app/data` and uvicorn run straight from the venv, so the container runs as a non-root user
+- [x] Removed unused Next.js starter SVGs and tracked test output
+
+Tests: pytest 38 passed (new: invalid usernames and oversized chat rejected with 422); Vitest 30 passed; container run as uid 1000 with the demo build answered a live chat request.
