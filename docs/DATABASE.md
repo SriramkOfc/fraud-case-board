@@ -131,7 +131,7 @@ Because the whole board is saved at once, a move never leaves half-updated posit
 | First sign in for a username | create the `users` row and a `boards` row seeded with the five stages and the sample fraud cases |
 | Board loads | read `boards.data` for the user, return it as JSON |
 | Any change in the UI | frontend sends the whole updated board; backend validates and overwrites `boards.data` |
-| AI updates cases | AI returns a whole board; backend validates it the same way and saves it |
+| AI updates cases | AI returns a whole board; backend validates it the same way, rejects it if any case was removed, sets timestamps by comparing with the stored board, then saves it (HTTP 502 and nothing saved if invalid) |
 
 ## 6. Validation
 

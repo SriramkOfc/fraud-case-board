@@ -3,6 +3,9 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 static_dir = Path(tempfile.mkdtemp())
 (static_dir / "index.html").write_text("<h1>Fraud Case Board</h1>")

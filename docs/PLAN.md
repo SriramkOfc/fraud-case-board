@@ -4,7 +4,7 @@ The app is a fraud case board for a fraud analyst. Cases move through five fixed
 
 ## Status
 
-Parts 1-7 done, plus requested additions 7b (richer cases, case windows) and 7c (archive). Next: Part 8. Latest results: pytest 25 passed (100% backend coverage), Vitest 25 passed (93.5% lines), Playwright 11 passed.
+Parts 1-9 done, plus requested additions 7b (richer cases, case windows) and 7c (archive). Next: Part 10. Latest results: pytest 36 passed including the live AI calls (100% backend coverage), Vitest 25 passed (93.5% lines), Playwright 11 passed.
 
 ## Architecture decisions
 
@@ -16,7 +16,7 @@ Parts 1-7 done, plus requested additions 7b (richer cases, case windows) and 7c 
 - Validation (Pydantic, on every save, 422 and nothing saved on failure): the five stage ids in order; every card in exactly one column, once; card ids match keys; non-empty title and customer; `accountLast4` exactly 4 digits; `amount` >= 0; `createdAt` / `updatedAt` present; `archivedAt` optional.
 - Sign in (MVP): frontend-only check of the hardcoded credentials, with the signed-in username held in `sessionStorage`. API routes take the username in the path. Server-side session cookies are suggested as a follow-up at the end (Part 11).
 - Saving: the frontend loads the board after sign in and saves the whole board (PUT) after every change.
-- AI: OpenRouter via the `openai` Python SDK with `base_url=https://openrouter.ai/api/v1`, model `openai/gpt-oss-120b:free` (free variant, rate limited). Chat history lives in frontend state and is sent with each request (not stored in the DB).
+- AI: OpenRouter via the `openai` Python SDK with `base_url=https://openrouter.ai/api/v1`, model `nvidia/nemotron-3.5-super-vl:free` (free, rate limited, supports structured outputs). Originally `openai/gpt-oss-120b:free`, which OpenRouter withdrew (see Part 8). Chat history lives in frontend state and is sent with each request (not stored in the DB).
 - AI updates return the full board, which the backend validates with the same rules and saves.
 
 ## Product and UX decisions
@@ -216,36 +216,52 @@ Success criteria: no case can be deleted from the board directly; archived cases
 
 ## Part 8: AI connectivity
 
-- [ ] Add `openai` SDK; client configured for OpenRouter using `OPENROUTER_API_KEY` from `.env`
-- [ ] `POST /api/ai/test` sends "What is 2+2?" and returns the answer
+- [x] Add `openai` SDK; client configured for OpenRouter using `OPENROUTER_API_KEY` from `.env` (`app/ai.py`)
+- [x] `POST /api/ai/test` sends "What is 2+2?" and returns `{"answer": ...}`
+- [x] Tests load the project-root `.env` (`python-dotenv`, dev only), so the live test runs with a plain `uv run pytest`. Rate limits (429) are not hidden: the live test fails if the model is unavailable
+- [x] Endpoint kept after Part 9 as a connectivity check
 
 Tests:
-- pytest with the client mocked: route returns model text
-- Live test (skipped when no key): answer contains "4"
+- [x] pytest with `ai.ask` mocked: route returns model text
+- [x] Live test (skipped only when no key): answer contains "4" ("2 + 2 = 4")
+- [x] pytest: 27 passed, coverage 100%
+- [x] Container: `curl -X POST /api/ai/test` returns `{"answer":"2 + 2 = 4"}`
 
-Success criteria: a real OpenRouter call succeeds from inside the container.
+Notes:
+- First live run failed with 404 "This model is unavailable for free". The OpenRouter models list confirmed `openai/gpt-oss-120b:free` is gone (only paid `openai/gpt-oss-120b` remains). The user chose the free `nvidia/nemotron-3.5-super-vl:free`, which the models list shows with `structured_outputs` and `response_format` support (needed for Part 9). `AGENTS.md` updated
+
+Success criteria: a real OpenRouter call succeeds from inside the container. Met.
 
 ## Part 9: AI with the board (structured outputs)
 
-- [ ] `POST /api/users/{username}/chat` with `{ message, history }`
-- [ ] Prompt includes a fraud-operations system prompt, the current board JSON, the history, and the user message
-- [ ] Fraud-aware system prompt: the AI acts as a fraud operations assistant; it knows what each stage means and the normal work in it (alert triage and holds; review for false positives and duplicates; investigation of devices, IPs, linked accounts and fund flow; customer and KYC verification; decision outcomes such as block and reissue, chargeback, SAR filing, release hold, rule tuning); it uses fraud terminology, suggests sensible next steps, writes case details as concise analyst notes, and does not invent real customer personal data
-- [ ] Structured output schema: `{ "reply": string, "board": BoardData | null }`
-- [ ] If `board` is returned, validate with the Part 6 rules and save; response returns `reply` and the saved board (or null)
-- [ ] The AI works with all case fields (customer, account last 4, amount, notes) and invents only clearly fictional customer data when asked to create cases
-- [ ] The AI archives (sets `archivedAt`) instead of deleting: a returned board that drops existing cases is rejected and nothing is saved
-- [ ] The backend sets timestamps for AI changes by comparing with the stored board: new cases get `createdAt` = `updatedAt` = now; changed, moved, archived or restored cases get `updatedAt` = now (model-provided timestamps are not trusted)
+- [x] `POST /api/users/{username}/chat` with `{ message, history }` (history items `{role: "user" | "assistant", content}`)
+- [x] Prompt includes a fraud-operations system prompt, the current board JSON, the history, and the user message
+- [x] Fraud-aware system prompt: the AI acts as a fraud operations assistant; it knows what each stage means and the normal work in it (alert triage and holds; review for false positives and duplicates; investigation of devices, IPs, linked accounts and fund flow; customer and KYC verification; decision outcomes such as block and reissue, chargeback, SAR filing, release hold, rule tuning); it uses fraud terminology, suggests sensible next steps, writes case details as concise analyst notes, and does not invent real customer personal data
+- [x] Structured output schema: `{ "reply": string, "board": BoardData | null }` (`ChatReply` Pydantic model passed to `chat.completions.parse`)
+- [x] If `board` is returned, validate with the Part 6 rules and save; response returns `reply` and the saved board (or null)
+- [x] The AI works with all case fields (customer, account last 4, amount, notes) and invents only clearly fictional customer data when asked to create cases
+- [x] The AI archives (sets `archivedAt`) instead of deleting: a returned board that drops existing cases is rejected and nothing is saved
+- [x] The backend sets timestamps for AI changes by comparing with the stored board: new cases get `createdAt` = `updatedAt` = now; changed, moved, archived or restored cases get `updatedAt` = now (model-provided timestamps are not trusted; an already archived case keeps its original `archivedAt`)
+- [x] Invalid AI output (fails validation or drops a case) returns HTTP 502 with the reason; nothing is saved
 
-Tests (pytest, AI client mocked):
-- Reply only: board unchanged
-- Reply with board update (create, edit, move multiple cases): board saved
-- Invalid AI board rejected, existing board unchanged
-- AI board that removes a case rejected; archiving through the AI works
-- Timestamps set by the backend for new and changed cases, untouched for unchanged cases
-- History is passed through to the model
-- Live test (skipped when no key): asking to "move the geo-mismatch case to Investigation" moves that card
+Tests (pytest, OpenRouter client replaced by a fake):
+- [x] Reply only: board unchanged
+- [x] Reply with board update (create, edit, move multiple cases): board saved
+- [x] Invalid AI board rejected (502), existing board unchanged
+- [x] AI board that removes a case rejected; archiving and restoring through the AI works, case stays in its stage
+- [x] Timestamps set by the backend for new and changed cases, untouched for unchanged cases even when the model sends different ones
+- [x] System prompt, board JSON, history and message are passed to the model in order
+- [x] Live test: asking to "move the geo-mismatch case to Investigation" moves card-3
+- [x] pytest: 36 passed, coverage 100%
+- [x] Manual live run (temp DB, chained history): created two cases, moved two and edited one in one request, archived the false positive (kept in Decision), answered an advice question with no board change. 4-15 s per request
+- [x] Container: chat route moved card-3 to Investigation (check user removed from `data/app.db` afterwards)
 
-Success criteria: the AI can reliably create, edit and move one or more fraud cases via structured outputs.
+Notes:
+- A probe before writing the route confirmed the free model returns valid `ChatReply` JSON through `chat.completions.parse`, including the `cards` dictionary
+- `pydantic.ValidationError` subclasses `ValueError`, so one `except ValueError` covers schema failures and dropped cases
+- Each AI request sends the whole board and gets the whole board back; fine for MVP board sizes, slower as boards grow
+
+Success criteria: the AI can reliably create, edit and move one or more fraud cases via structured outputs. Met.
 
 ## Part 10: AI chat sidebar
 
