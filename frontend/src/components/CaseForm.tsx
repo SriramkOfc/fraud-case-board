@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import clsx from "clsx";
-import type { CaseInput } from "@/lib/kanban";
+import { ALERT_TYPES, RISK_LEVELS, type AlertType, type CaseInput, type RiskLevel } from "@/lib/kanban";
 
 type CaseFormProps = {
   initial?: CaseInput; // omitted for a new case: all fields start empty
@@ -19,7 +19,15 @@ export const CaseForm = ({ initial, submitLabel, onSubmit, onCancel }: CaseFormP
   const [form, setForm] = useState(
     initial
       ? { ...initial, amount: String(initial.amount) }
-      : { title: "", details: "", customerName: "", accountLast4: "", amount: "" }
+      : {
+          title: "",
+          details: "",
+          alertType: "Card fraud" as AlertType,
+          risk: "medium" as RiskLevel,
+          customerName: "",
+          accountLast4: "",
+          amount: "",
+        }
   );
   const set = (field: keyof typeof form) => (value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -32,6 +40,8 @@ export const CaseForm = ({ initial, submitLabel, onSubmit, onCancel }: CaseFormP
     onSubmit({
       title: form.title.trim(),
       details: form.details.trim(),
+      alertType: form.alertType,
+      risk: form.risk,
       customerName: form.customerName.trim(),
       accountLast4: form.accountLast4,
       amount: Number(form.amount),
@@ -51,6 +61,36 @@ export const CaseForm = ({ initial, submitLabel, onSubmit, onCancel }: CaseFormP
           required
         />
       </label>
+      <div className="flex gap-2">
+        <label className="block flex-1 space-y-1">
+          <span className={captionClass}>Alert type</span>
+          <select
+            value={form.alertType}
+            onChange={(event) => set("alertType")(event.target.value)}
+            aria-label="Alert type"
+            className={inputClass}
+          >
+            {ALERT_TYPES.map((type) => (
+              <option key={type}>{type}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block w-32 space-y-1">
+          <span className={captionClass}>Risk</span>
+          <select
+            value={form.risk}
+            onChange={(event) => set("risk")(event.target.value)}
+            aria-label="Risk"
+            className={clsx(inputClass, "capitalize")}
+          >
+            {RISK_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <label className="block flex-1 space-y-1">
         <span className={captionClass}>Customer</span>
         <input

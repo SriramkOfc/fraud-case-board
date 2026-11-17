@@ -1,16 +1,33 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import clsx from "clsx";
-import { sendChat, type ChatMessage } from "@/lib/api";
+import { sendChat, type Change, type ChatMessage } from "@/lib/api";
 import type { BoardData } from "@/lib/kanban";
 
 type ChatSidebarProps = {
   username: string;
-  onBoard: (board: BoardData) => void;
+  board: BoardData;
+  onApply: (board: BoardData) => void;
 };
 
-export const ChatSidebar = ({ username, onBoard }: ChatSidebarProps) => {
+// AI board changes are proposals. `base` is the board the AI saw: a proposal can only be applied while the board is unchanged
+type Proposal = {
+  board: BoardData;
+  changes: Change[];
+  base: BoardData;
+  status: "pending" | "applied" | "discarded" | "stale";
+};
+
+type Message = ChatMessage & { proposal?: Proposal };
+
+const proposalStatus = {
+  applied: "Applied. Recorded in each case's audit trail.",
+  discarded: "Discarded. Nothing was changed.",
+  stale: "The board changed after this was proposed. Ask again for an up-to-date proposal.",
+};
+
+export const ChatSidebar = ({ username, board, onApply }: ChatSidebarProps) => {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -26,25 +43,37 @@ export const ChatSidebar = ({ username, onBoard }: ChatSidebarProps) => {
     if (!message || loading) {
       return;
     }
-    const history = messages;
-    setMessages([...history, { role: "user", content: message }]);
+    const history = messages.map(({ role, content }) => ({ role, content }));
+    const base = board;
+    setMessages((prev) => [...prev, { role: "user", content: message }]);
     setInput("");
     setError(false);
     setLoading(true);
     try {
       const result = await sendChat(username, message, history.slice(-20));
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: result.reply },
-      ]);
-      if (result.board) {
-        onBoard(result.board);
-      }
+      const proposal: Proposal | undefined = result.board
+        ? { board: result.board, changes: result.changes, base, status: "pending" }
+        : undefined;
+      setMessages((prev) => [...prev, { role: "assistant", content: result.reply, proposal }]);
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const resolve = (index: number, apply: boolean) => {
+    const proposal = messages[index].proposal!;
+    let status: Proposal["status"] = "discarded";
+    if (apply) {
+      status = proposal.base === board ? "applied" : "stale";
+    }
+    if (status === "applied") {
+      onApply(proposal.board);
+    }
+    setMessages((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, proposal: { ...proposal, status } } : m))
+    );
   };
 
   // Overlays the board so the five stages keep their full width; stays mounted when closed to keep the conversation
@@ -89,23 +118,65 @@ export const ChatSidebar = ({ username, onBoard }: ChatSidebarProps) => {
         >
           {messages.length === 0 && (
             <p className="text-sm leading-6 text-[var(--gray-text)]">
-              Ask about your cases, or have the assistant create, edit, move or
-              archive them. For example: &quot;Move the geo-mismatch case to
+              Ask about your cases, or have the assistant propose changes for
+              you to approve. For example: &quot;Which cases should I work
+              first?&quot; or &quot;Move the geo-mismatch case to
               Investigation&quot;.
             </p>
           )}
           {messages.map((message, index) => (
-            <div
-              key={index}
-              data-testid={`chat-${message.role}`}
-              className={clsx(
-                "whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6",
-                message.role === "user"
-                  ? "ml-8 bg-[var(--navy-dark)] text-white"
-                  : "mr-8 border border-[var(--stroke)] bg-[var(--surface)] text-[var(--navy-dark)]",
+            <div key={index} className="space-y-2">
+              <div
+                data-testid={`chat-${message.role}`}
+                className={clsx(
+                  "whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6",
+                  message.role === "user"
+                    ? "ml-8 bg-[var(--navy-dark)] text-white"
+                    : "mr-8 border border-[var(--stroke)] bg-[var(--surface)] text-[var(--navy-dark)]",
+                )}
+              >
+                {message.content}
+              </div>
+              {message.proposal && (
+                <div
+                  data-testid="proposal"
+                  className="mr-8 rounded-2xl border border-dashed border-[var(--secondary-purple)] px-4 py-3"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--secondary-purple)]">
+                    Proposed changes ({message.proposal.changes.length})
+                  </p>
+                  <ul className="mt-2 space-y-1.5 text-sm leading-5 text-[var(--navy-dark)]">
+                    {message.proposal.changes.map((change, i) => (
+                      <li key={i}>
+                        <span className="font-semibold">{change.title}</span>
+                        <span className="text-[var(--gray-text)]">: {change.detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {message.proposal.status === "pending" ? (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => resolve(index, true)}
+                        className="rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:brightness-110"
+                      >
+                        Apply changes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => resolve(index, false)}
+                        className="rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
+                      >
+                        Discard
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs font-semibold text-[var(--gray-text)]">
+                      {proposalStatus[message.proposal.status]}
+                    </p>
+                  )}
+                </div>
               )}
-            >
-              {message.content}
             </div>
           ))}
           {loading && (

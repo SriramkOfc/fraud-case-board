@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BoardPage } from "@/components/BoardPage";
+import type { Change } from "@/lib/api";
 import type { BoardData } from "@/lib/kanban";
 import { sampleBoard } from "@/test/board";
 import { mockBackend } from "@/test/mockBackend";
@@ -92,7 +93,7 @@ describe("ChatSidebar", () => {
     expect(screen.queryByText("Thinking...")).not.toBeInTheDocument();
   });
 
-  it("updates the board and archive count when the AI returns a board", async () => {
+  const aiBoard = () => {
     const board: BoardData = structuredClone(sampleBoard);
     board.cards["card-ai-1"] = {
       ...board.cards["card-1"],
@@ -108,32 +109,65 @@ describe("ChatSidebar", () => {
       ...board.cards["card-8"],
       archivedAt: "2026-11-17T10:00:00Z",
     };
-    const fetchMock = mockBackend(() => ({
-      reply: "Updated three cases.",
-      board,
-    }));
+    return board;
+  };
+
+  const changes: Change[] = [
+    { cardId: "card-ai-1", title: "SIM swap alert", action: "created", detail: "Created in Alert Triggered (medium risk)" },
+    { cardId: "card-3", title: "Triage: geo-mismatch purchase", action: "moved", detail: "Moved from Review to Investigation" },
+  ];
+
+  const puts = (fetchMock: ReturnType<typeof mockBackend>) =>
+    fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
+
+  it("shows AI board changes as a proposal and applies them only when approved", async () => {
+    const fetchMock = mockBackend(() => ({ reply: "I propose three changes.", board: aiBoard(), changes }));
     await renderPage();
 
     await send("Create, move and archive");
-    expect(await screen.findByText("Updated three cases.")).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId("column-col-alert")).getByText(
-        "SIM swap alert",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId("column-col-investigation")).getByTestId(
-        "card-card-3",
-      ),
-    ).toBeInTheDocument();
+    const proposal = await screen.findByTestId("proposal");
+    expect(within(proposal).getByText("Proposed changes (2)")).toBeInTheDocument();
+    expect(within(proposal).getByText(": Moved from Review to Investigation")).toBeInTheDocument();
+    // Nothing changes until the analyst applies it
+    expect(within(screen.getByTestId("column-col-alert")).queryByText("SIM swap alert")).not.toBeInTheDocument();
+    expect(puts(fetchMock)).toHaveLength(0);
+
+    await userEvent.click(within(proposal).getByRole("button", { name: "Apply changes" }));
+    expect(within(screen.getByTestId("column-col-alert")).getByText("SIM swap alert")).toBeInTheDocument();
+    expect(within(screen.getByTestId("column-col-investigation")).getByTestId("card-card-3")).toBeInTheDocument();
     expect(screen.queryByTestId("card-card-8")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Archived (1)" }),
-    ).toBeInTheDocument();
-    // The backend saved the AI board; the frontend does not save it again
-    expect(
-      fetchMock.mock.calls.some(([, init]) => init?.method === "PUT"),
-    ).toBe(false);
+    expect(screen.getByRole("button", { name: "Archived (1)" })).toBeInTheDocument();
+    expect(within(proposal).getByText(/Applied/)).toBeInTheDocument();
+    expect(within(proposal).queryByRole("button", { name: "Apply changes" })).not.toBeInTheDocument();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const [[url, init]] = puts(fetchMock);
+    expect(url).toBe("/api/users/user/board?actor=ai");
+    expect(JSON.parse(init!.body as string)).toEqual(aiBoard());
+  });
+
+  it("discards a proposal without changing the board", async () => {
+    const fetchMock = mockBackend(() => ({ reply: "Proposal.", board: aiBoard(), changes }));
+    await renderPage();
+    await send("Create a case");
+    const proposal = await screen.findByTestId("proposal");
+    await userEvent.click(within(proposal).getByRole("button", { name: "Discard" }));
+    expect(within(proposal).getByText(/Discarded/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("column-col-alert")).queryByText("SIM swap alert")).not.toBeInTheDocument();
+    expect(puts(fetchMock)).toHaveLength(0);
+  });
+
+  it("refuses to apply a proposal after the board has changed", async () => {
+    mockBackend(() => ({ reply: "Proposal.", board: aiBoard(), changes }));
+    await renderPage();
+    await send("Create a case");
+    const proposal = await screen.findByTestId("proposal");
+
+    const title = screen.getAllByLabelText("Column title")[1];
+    await userEvent.type(title, "!");
+    await userEvent.click(within(proposal).getByRole("button", { name: "Apply changes" }));
+    expect(within(proposal).getByText(/board changed after this was proposed/)).toBeInTheDocument();
+    expect(within(screen.getByTestId("column-col-alert")).queryByText("SIM swap alert")).not.toBeInTheDocument();
   });
 
   it("shows an error when the request fails", async () => {

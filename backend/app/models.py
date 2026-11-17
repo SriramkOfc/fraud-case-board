@@ -1,12 +1,19 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 STAGE_IDS = ["col-alert", "col-review", "col-investigation", "col-verification", "col-decision"]
+
+AlertType = Literal["Card fraud", "Account takeover", "Scam (APP)", "Identity fraud", "Money mule", "First-party fraud"]
+RiskLevel = Literal["low", "medium", "high", "critical"]
 
 
 class Card(BaseModel):
     id: str
     title: str = Field(min_length=1)
     details: str
+    alertType: AlertType
+    risk: RiskLevel
     customerName: str = Field(min_length=1)
     accountLast4: str = Field(pattern=r"^\d{4}$")  # only the last 4 digits are stored
     amount: float = Field(ge=0)  # amount at risk, USD

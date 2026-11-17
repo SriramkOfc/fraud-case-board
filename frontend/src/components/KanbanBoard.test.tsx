@@ -3,10 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { sampleBoard } from "@/test/board";
+import { mockBackend } from "@/test/mockBackend";
 
 const Board = () => {
   const [board, setBoard] = useState(sampleBoard);
-  return <KanbanBoard board={board} updateBoard={setBoard} onLogout={() => {}} />;
+  return <KanbanBoard username="user" board={board} updateBoard={setBoard} onLogout={() => {}} />;
 };
 
 const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
@@ -17,6 +18,10 @@ const openCase = async (cardId: string) => {
 };
 
 describe("KanbanBoard", () => {
+  beforeEach(() => {
+    mockBackend();
+  });
+
   it("renders five columns", () => {
     render(<Board />);
     expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
@@ -167,7 +172,7 @@ describe("KanbanBoard", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Archived (1)" }));
     const row = screen.getByTestId("archived-card-6");
-    expect(within(row).getByText("Confirm txns with cardholder")).toBeInTheDocument();
+    expect(within(row).getByText("Investment scam: 3 payments to new payee")).toBeInTheDocument();
     expect(within(row).getByText(/Stage: Verification/)).toBeInTheDocument();
     expect(screen.queryByTestId("column-col-alert")).not.toBeInTheDocument();
 
@@ -194,5 +199,31 @@ describe("KanbanBoard", () => {
     expect(screen.queryByTestId("archived-card-8")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /back to board/i }));
     expect(screen.queryByTestId("card-card-8")).not.toBeInTheDocument();
+  });
+
+  it("shows the exposure summary and each case's risk", () => {
+    render(<Board />);
+    expect(screen.getByText("$68,005.85")).toBeInTheDocument();
+    expect(within(screen.getByTestId("card-card-5")).getByText("critical")).toBeInTheDocument();
+    expect(within(screen.getByTestId("card-card-5")).getByText("Account takeover")).toBeInTheDocument();
+  });
+
+  it("shows the audit trail in the case window", async () => {
+    mockBackend(undefined, [
+      { cardId: "card-1", title: "x", action: "moved", detail: "Moved from Review to Investigation", actor: "ai", at: "2026-11-17T10:00:00Z" },
+      { cardId: "card-1", title: "x", action: "created", detail: "Created in Review (low risk)", actor: "analyst", at: "2026-11-17T09:00:00Z" },
+    ]);
+    render(<Board />);
+    const dialog = await openCase("card-1");
+    const trail = await within(dialog).findByRole("list", { name: "Audit trail" });
+    expect(within(trail).getByText("Moved from Review to Investigation")).toBeInTheDocument();
+    expect(within(trail).getByText(/AI, approved by analyst/)).toBeInTheDocument();
+    expect(within(trail).getByText(/^Analyst/)).toBeInTheDocument();
+  });
+
+  it("says when a case has no audit entries yet", async () => {
+    render(<Board />);
+    const dialog = await openCase("card-2");
+    expect(await within(dialog).findByText("No changes since the case was opened.")).toBeInTheDocument();
   });
 });

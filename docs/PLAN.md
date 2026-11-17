@@ -292,3 +292,15 @@ Success criteria: an analyst can chat with the AI and see fraud cases created, e
 - [x] Removed unused Next.js starter SVGs and tracked test output
 
 Tests: pytest 38 passed (new: invalid usernames and oversized chat rejected with 422); Vitest 30 passed; container run as uid 1000 with the demo build answered a live chat request.
+
+## Part 12: Bank-grade case handling (added on request)
+
+- [x] Cases get `alertType` (Card fraud, Account takeover, Scam (APP), Identity fraud, Money mule, First-party fraud) and `risk` (low, medium, high, critical), validated as enums; shown as a label and risk badge on cards, in the case window and in the case form. Seed cases assigned; card-6 became an investment (APP) scam case
+- [x] Header shows open cases, open exposure (active cases not yet in Decision) and the high or critical count
+- [x] Audit trail: append-only `events` table written in the same transaction as each save from the board difference (`app/audit.py`); `GET /api/users/{username}/cards/{card_id}/history`; shown in the case window, newest first
+- [x] AI changes are proposals: the chat route no longer saves. It returns the timestamped board plus a change list; the sidebar shows "Proposed changes" with Apply / Discard. Apply saves with `?actor=ai` only if the board is the one the AI saw (reference equality), otherwise the proposal is marked stale
+- [x] Saves are queued in `api.ts` so PUTs reach the server in order and history reads wait for them
+- [x] System prompt: alert types, risk guidance, prioritisation order, "escalate" raises risk, proposals are described as proposals, cases referred to by title not id
+- [x] Local `data/app.db` (old shape, sample data only) moved to `data/app.db.pre-risk-backup`
+
+Tests: pytest 44 passed (audit trail for every action and actor, baseline save, unknown actor rejected, chat no longer saves, no-change proposals return null); Vitest 36 passed, 94.5% lines (proposal apply / discard / stale, actor on PUT, risk and alert type saved, exposure, audit trail rendering); Playwright 13 passed including live AI proposal, apply, and the audit trail entry. Manual live run: "card stolen, escalate and move to Investigation" produced a proposal, applying it moved the case and logged "AI, approved by analyst".

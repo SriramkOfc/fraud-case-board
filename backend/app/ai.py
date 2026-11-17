@@ -4,6 +4,7 @@ from typing import Literal
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+from app.audit import Change
 from app.models import BoardData
 
 MODEL = "nvidia/nemotron-3.5-super-vl:free"
@@ -17,12 +18,18 @@ The board has five fixed stages, in order (ids in brackets; never add, remove or
 4. Verification (col-verification): contact the customer (outbound call, OTP), KYC checks, confirm which transactions are disputed.
 5. Decision (col-decision): outcomes such as block and reissue, chargeback, SAR filing, release hold, close as false positive, rule or model tuning.
 
-Each case (card) has: id, title, details (case notes), customerName, accountLast4 (exactly 4 digits, never a full account number), amount (USD at risk, >= 0), createdAt, updatedAt, archivedAt (null when active).
+Each case (card) has: id, title, details (case notes), alertType, risk, customerName, accountLast4 (exactly 4 digits, never a full account number), amount (USD at risk, >= 0), createdAt, updatedAt, archivedAt (null when active).
+- alertType: one of "Card fraud", "Account takeover", "Scam (APP)" (authorised push payment scams: investment, romance, impersonation), "Identity fraud", "Money mule", "First-party fraud".
+- risk: "low", "medium", "high" or "critical". Weigh amount at risk, alert type, whether funds can still be stopped or recalled, and evidence in the notes. Account takeover with outbound funds and active scams with recall windows are usually high or critical.
 A case's stage is the column whose cardIds lists it; order within a stage is the cardIds order.
 
 How to respond:
 - Always write a short, helpful `reply` using fraud operations terminology, and suggest sensible next steps when useful.
 - If the user asks to create, edit, move, archive or restore cases, return the complete updated board in `board`, keeping every other case and column exactly as it was. Otherwise return `board` as null.
+- Board changes are proposals: the analyst reviews and applies them, and every applied change is recorded in the case audit trail. In `reply`, say what you propose (for example "I propose moving ... to Investigation"), not that it is done.
+- When the user asks for prioritisation, rank open cases by risk, then amount at risk, then age.
+- "Escalate" means raise the risk at least one level (and move the case on if asked); "de-escalate" means lower it. Record why in the case notes.
+- Refer to cases by title and customer, never by internal ids such as card-1.
 - You can change several cases in one response.
 - Never delete a case: to remove one, archive it by setting archivedAt to any timestamp (it stays in its column). Restore by setting archivedAt to null.
 - New cases need a new unique id like "card-ai-<short random suffix>", must be added to exactly one column's cardIds, and need all fields. Timestamps are set by the system; any ISO 8601 value is fine.
@@ -39,8 +46,18 @@ class ChatMessage(BaseModel):
 
 
 class ChatReply(BaseModel):
+    """What the model returns."""
+
     reply: str
     board: BoardData | None
+
+
+class Proposal(BaseModel):
+    """What the chat route returns: the reply and, when the AI wants board changes, the proposed board and a summary."""
+
+    reply: str
+    board: BoardData | None
+    changes: list[Change]
 
 
 def client() -> OpenAI:
@@ -62,7 +79,7 @@ def chat(board: BoardData, history: list[ChatMessage], message: str) -> ChatRepl
     return response.choices[0].message.parsed
 
 
-CONTENT_FIELDS = {"title", "details", "customerName", "accountLast4", "amount"}
+CONTENT_FIELDS = {"title", "details", "alertType", "risk", "customerName", "accountLast4", "amount"}
 
 
 def stages(board: BoardData) -> dict[str, str]:

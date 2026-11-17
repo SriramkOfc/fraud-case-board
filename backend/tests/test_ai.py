@@ -53,7 +53,7 @@ def test_chat_reply_only_leaves_board_unchanged(client, fake_ai):
     before = client.get(BOARD_URL).json()
     response = client.post(CHAT_URL, json={"message": "Which case has the highest amount?"})
     assert response.status_code == 200
-    assert response.json() == {"reply": "No changes needed.", "board": None}
+    assert response.json() == {"reply": "No changes needed.", "board": None, "changes": []}
     assert client.get(BOARD_URL).json() == before
 
 
@@ -83,8 +83,14 @@ def test_chat_creates_edits_and_moves_multiple_cases(client, fake_ai):
 
     response = client.post(CHAT_URL, json={"message": "Create, edit and move"})
     assert response.status_code == 200
-    saved = client.get(BOARD_URL).json()
-    assert response.json()["board"] == saved
+    # A proposal only: nothing is saved until the analyst applies it
+    assert client.get(BOARD_URL).json() == SEED_BOARD.model_dump()
+    saved = response.json()["board"]
+    assert [(c["cardId"], c["action"]) for c in response.json()["changes"]] == [
+        ("card-1", "edited"),
+        ("card-3", "moved"),
+        ("card-ai-1", "created"),
+    ]
     cards, original = saved["cards"], SEED_BOARD.cards
 
     assert stage_of(saved, "card-ai-1") == "col-alert"
@@ -106,6 +112,7 @@ def test_chat_ignores_model_timestamps_on_unchanged_cases(client, fake_ai):
     board = seed()
     board["cards"]["card-2"]["updatedAt"] = "1999-01-01T00:00:00Z"
     board["cards"]["card-2"]["createdAt"] = "1999-01-01T00:00:00Z"
+    board["cards"]["card-1"]["risk"] = "high"
     fake_ai.reply = {"reply": "Done.", "board": board}
     saved = client.post(CHAT_URL, json={"message": "x"}).json()["board"]
     assert saved["cards"]["card-2"]["updatedAt"] == SEED_BOARD.cards["card-2"].updatedAt
@@ -121,6 +128,7 @@ def test_chat_archives_and_restores(client, fake_ai):
     assert archived_at not in (None, "1999-01-01T00:00:00Z")
     assert saved["cards"]["card-8"]["updatedAt"] == archived_at
     assert stage_of(saved, "card-8") == "col-decision"
+    client.put(f"{BOARD_URL}?actor=ai", json=saved)  # analyst applies the proposal
 
     saved["cards"]["card-8"]["archivedAt"] = None
     fake_ai.reply = {"reply": "Restored.", "board": saved}
@@ -134,6 +142,7 @@ def test_chat_keeps_archive_date_of_already_archived_case(client, fake_ai):
     board["cards"]["card-8"]["archivedAt"] = "2026-11-16T12:00:00Z"
     client.put(BOARD_URL, json=board)
     board["cards"]["card-8"]["archivedAt"] = "1999-01-01T00:00:00Z"
+    board["cards"]["card-1"]["risk"] = "high"
     fake_ai.reply = {"reply": "Done.", "board": board}
     saved = client.post(CHAT_URL, json={"message": "x"}).json()["board"]
     assert saved["cards"]["card-8"]["archivedAt"] == "2026-11-16T12:00:00Z"
@@ -166,4 +175,9 @@ def test_chat_rejects_board_that_removes_a_case(client, fake_ai):
 def test_chat_live_moves_case(client):
     response = client.post(CHAT_URL, json={"message": "Move the geo-mismatch case to Investigation"})
     assert response.status_code == 200
-    assert stage_of(client.get(BOARD_URL).json(), "card-3") == "col-investigation"
+    assert stage_of(response.json()["board"], "card-3") == "col-investigation"
+
+
+def test_chat_without_real_changes_proposes_nothing(client, fake_ai):
+    fake_ai.reply = {"reply": "Looks fine.", "board": seed()}
+    assert client.post(CHAT_URL, json={"message": "x"}).json() == {"reply": "Looks fine.", "board": None, "changes": []}

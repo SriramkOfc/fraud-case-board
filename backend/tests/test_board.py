@@ -18,6 +18,8 @@ def new_card(card_id: str, title: str) -> dict:
         "id": card_id,
         "title": title,
         "details": "Merchant 88",
+        "alertType": "Card fraud",
+        "risk": "medium",
         "customerName": "Test Customer",
         "accountLast4": "1234",
         "amount": 250.5,

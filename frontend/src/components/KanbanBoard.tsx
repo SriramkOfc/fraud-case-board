@@ -15,15 +15,16 @@ import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { CaseDialog } from "@/components/CaseDialog";
 import { ArchiveView } from "@/components/ArchiveView";
-import { createId, moveCard, type BoardData, type CaseInput } from "@/lib/kanban";
+import { createId, exposure, formatAmount, moveCard, type BoardData, type CaseInput } from "@/lib/kanban";
 
 type KanbanBoardProps = {
+  username: string;
   board: BoardData;
   updateBoard: (update: (prev: BoardData) => BoardData) => void;
   onLogout: () => void;
 };
 
-export const KanbanBoard = ({ board, updateBoard, onLogout }: KanbanBoardProps) => {
+export const KanbanBoard = ({ username, board, updateBoard, onLogout }: KanbanBoardProps) => {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [showArchive, setShowArchive] = useState(false);
@@ -131,6 +132,7 @@ export const KanbanBoard = ({ board, updateBoard, onLogout }: KanbanBoardProps) 
   const openColumn = board.columns.find((column) => openCardId && column.cardIds.includes(openCardId));
   const stageTitleOf = (cardId: string) =>
     board.columns.find((column) => column.cardIds.includes(cardId))?.title ?? "";
+  const stats = exposure(board);
   const archivedCards = Object.values(board.cards)
     .filter((card) => card.archivedAt)
     .sort((a, b) => b.archivedAt!.localeCompare(a.archivedAt!));
@@ -151,19 +153,12 @@ export const KanbanBoard = ({ board, updateBoard, onLogout }: KanbanBoardProps) 
                 Fraud Case Board
               </h1>
               <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--gray-text)]">
-                Track every fraud alert from trigger to decision. Drag cases between
-                stages, rename stages, and capture investigation notes.
+                Track every fraud alert from trigger to decision. Every change is
+                recorded in the case audit trail, and AI suggestions are applied only
+                when an analyst approves them.
               </p>
             </div>
             <div className="flex items-start gap-4">
-              <div className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-                  Focus
-                </p>
-                <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
-                  Alert to decision. Five stages.
-                </p>
-              </div>
               <button
                 type="button"
                 onClick={() => setShowArchive((prev) => !prev)}
@@ -180,6 +175,25 @@ export const KanbanBoard = ({ board, updateBoard, onLogout }: KanbanBoardProps) 
               </button>
             </div>
           </div>
+          <dl className="grid gap-3 sm:grid-cols-3">
+            {[
+              { label: "Open cases", value: String(stats.openCases) },
+              { label: "Open exposure", value: formatAmount(stats.amount) },
+              { label: "High or critical risk", value: String(stats.highRisk) },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-5 py-4"
+              >
+                <dt className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
+                  {stat.label}
+                </dt>
+                <dd className="mt-2 font-display text-2xl font-semibold text-[var(--navy-dark)]">
+                  {stat.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
           <div className="flex flex-wrap items-center gap-4">
             {board.columns.map((column) => (
               <div
@@ -233,6 +247,7 @@ export const KanbanBoard = ({ board, updateBoard, onLogout }: KanbanBoardProps) 
         {openCard && openColumn && (
           <CaseDialog
             key={openCard.id}
+            username={username}
             card={openCard}
             stageTitle={openColumn.title}
             onClose={() => setOpenCardId(null)}

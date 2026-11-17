@@ -1,6 +1,21 @@
+export const ALERT_TYPES = [
+  "Card fraud",
+  "Account takeover",
+  "Scam (APP)",
+  "Identity fraud",
+  "Money mule",
+  "First-party fraud",
+] as const;
+export type AlertType = (typeof ALERT_TYPES)[number];
+
+export const RISK_LEVELS = ["low", "medium", "high", "critical"] as const;
+export type RiskLevel = (typeof RISK_LEVELS)[number];
+
 export type CaseInput = {
   title: string;
   details: string;
+  alertType: AlertType;
+  risk: RiskLevel;
   customerName: string;
   accountLast4: string;
   amount: number;
@@ -126,3 +141,14 @@ export const formatAmount = (amount: number) =>
 
 export const formatDate = (iso: string) =>
   new Date(iso).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
+
+// Open exposure: active cases that have not reached a decision
+export const exposure = (board: BoardData) => {
+  const decided = new Set(board.columns.at(-1)!.cardIds);
+  const open = Object.values(board.cards).filter((card) => !card.archivedAt && !decided.has(card.id));
+  return {
+    openCases: open.length,
+    amount: open.reduce((sum, card) => sum + card.amount, 0),
+    highRisk: open.filter((card) => card.risk === "high" || card.risk === "critical").length,
+  };
+};

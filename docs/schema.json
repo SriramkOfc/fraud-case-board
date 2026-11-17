@@ -17,6 +17,22 @@
         "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
       },
       "notes": "data holds the whole board as JSON (BoardData). user_id is UNIQUE: one board per user for the MVP."
+    },
+    "events": {
+      "columns": {
+        "id": "INTEGER PRIMARY KEY",
+        "user_id": "INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+        "card_id": "TEXT NOT NULL",
+        "title": "TEXT NOT NULL",
+        "actor": "TEXT NOT NULL  -- analyst | ai",
+        "action": "TEXT NOT NULL  -- created | edited | moved | archived | restored | deleted",
+        "detail": "TEXT NOT NULL",
+        "at": "TEXT NOT NULL  -- ISO 8601 UTC"
+      },
+      "indexes": [
+        "events_by_card (user_id, card_id)"
+      ],
+      "notes": "Append-only audit trail. Rows are written by the backend in the same transaction as the board save, from the difference between the stored and the new board. Never updated or deleted."
     }
   },
   "board_data": {
@@ -35,6 +51,8 @@
           "id": "string",
           "title": "string",
           "details": "string",
+          "alertType": "Card fraud | Account takeover | Scam (APP) | Identity fraud | Money mule | First-party fraud",
+          "risk": "low | medium | high | critical",
           "customerName": "string",
           "accountLast4": "string (4 digits)",
           "amount": "number (USD, >= 0)",
@@ -51,6 +69,7 @@
       "each card's id matches its key in cards",
       "card title is non-empty",
       "customerName is non-empty",
+      "alertType and risk are required and must be one of the listed values",
       "accountLast4 is exactly 4 digits (full account numbers are never stored)",
       "amount is >= 0",
       "createdAt and updatedAt are required",
@@ -97,7 +116,9 @@
           "accountLast4": "4821",
           "amount": 1260.0,
           "createdAt": "2026-11-16T08:42:00Z",
-          "updatedAt": "2026-11-16T08:42:00Z"
+          "updatedAt": "2026-11-16T08:42:00Z",
+          "alertType": "Card fraud",
+          "risk": "medium"
         },
         "card-5": {
           "id": "card-5",
@@ -107,7 +128,9 @@
           "accountLast4": "1093",
           "amount": 42300.0,
           "createdAt": "2026-11-14T14:30:00Z",
-          "updatedAt": "2026-11-15T23:10:00Z"
+          "updatedAt": "2026-11-15T23:10:00Z",
+          "alertType": "Card fraud",
+          "risk": "medium"
         }
       }
     }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChatSidebar } from "@/components/ChatSidebar";
 import { KanbanBoard } from "@/components/KanbanBoard";
-import { getBoard, saveBoard } from "@/lib/api";
+import { getBoard, saveBoard, type Actor } from "@/lib/api";
 import type { BoardData } from "@/lib/kanban";
 
 type BoardPageProps = {
@@ -24,18 +24,21 @@ export const BoardPage = ({ username, onLogout }: BoardPageProps) => {
     );
   }
 
-  // Every change updates the screen and saves the whole board
-  const updateBoard = (update: (prev: BoardData) => BoardData) => {
-    const next = update(board);
+  // Every change updates the screen and saves the whole board; the backend records it in the audit trail
+  const save = (next: BoardData, actor: Actor) => {
     setBoard(next);
-    saveBoard(username, next);
+    saveBoard(username, next, actor);
   };
 
-  // The backend has already saved boards returned by the AI, so they only update the screen
   return (
     <>
-      <KanbanBoard board={board} updateBoard={updateBoard} onLogout={onLogout} />
-      <ChatSidebar username={username} onBoard={setBoard} />
+      <KanbanBoard
+        username={username}
+        board={board}
+        updateBoard={(update) => save(update(board), "analyst")}
+        onLogout={onLogout}
+      />
+      <ChatSidebar username={username} board={board} onApply={(next) => save(next, "ai")} />
     </>
   );
 };

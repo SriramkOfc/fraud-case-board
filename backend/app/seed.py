@@ -45,6 +45,8 @@ SEED_BOARD = BoardData.model_validate(
         "cards": {
             "card-1": {
                 "id": "card-1",
+                "alertType": "Card fraud",
+                "risk": "medium",
                 "title": "Velocity rule: 14 card txns in 10 min",
                 "details": "Rule engine flagged rapid low-value card-not-present purchases. Auto-hold placed; assign to analyst queue by risk score.",
                 "customerName": "Daniel Okafor",
@@ -55,6 +57,8 @@ SEED_BOARD = BoardData.model_validate(
             },
             "card-2": {
                 "id": "card-2",
+                "alertType": "Account takeover",
+                "risk": "critical",
                 "title": "ML score 0.94: new device login + wire",
                 "details": "Model alert on login from unseen device followed by $18,500 outbound wire. Wire paused pending triage.",
                 "customerName": "Priya Sharma",
@@ -65,6 +69,8 @@ SEED_BOARD = BoardData.model_validate(
             },
             "card-3": {
                 "id": "card-3",
+                "alertType": "Card fraud",
+                "risk": "low",
                 "title": "Triage: geo-mismatch purchase",
                 "details": "Check customer profile, travel notes, and recent history. Rule out false positive before escalating.",
                 "customerName": "Lucas Moreau",
@@ -75,6 +81,8 @@ SEED_BOARD = BoardData.model_validate(
             },
             "card-4": {
                 "id": "card-4",
+                "alertType": "First-party fraud",
+                "risk": "low",
                 "title": "Triage: duplicate refund requests",
                 "details": "Confirm alert data is complete, dedupe related alerts, and link to existing case if one is open.",
                 "customerName": "Hannah Becker",
@@ -85,6 +93,8 @@ SEED_BOARD = BoardData.model_validate(
             },
             "card-5": {
                 "id": "card-5",
+                "alertType": "Account takeover",
+                "risk": "critical",
                 "title": "Account takeover - merchant #4471",
                 "details": "Pull device fingerprints, IP logs, and linked accounts. Trace fund flow and document timeline in case notes.",
                 "customerName": "Kestrel Home Supplies Pty Ltd",
@@ -95,8 +105,10 @@ SEED_BOARD = BoardData.model_validate(
             },
             "card-6": {
                 "id": "card-6",
-                "title": "Confirm txns with cardholder",
-                "details": "Outbound call / OTP verification with customer. Validate identity (KYC) and confirm which transactions are disputed.",
+                "alertType": "Scam (APP)",
+                "risk": "high",
+                "title": "Investment scam: 3 payments to new payee",
+                "details": "Customer sent three transfers to a new payee after a social media investment pitch. Call the customer to confirm the scam, request a recall from the receiving bank and flag the payee account.",
                 "customerName": "Mei Lin Tan",
                 "accountLast4": "5582",
                 "amount": 3115.2,
@@ -105,6 +117,8 @@ SEED_BOARD = BoardData.model_validate(
             },
             "card-7": {
                 "id": "card-7",
+                "alertType": "Card fraud",
+                "risk": "high",
                 "title": "Confirmed fraud - close and recover",
                 "details": "Block card, reissue, file chargeback, and submit SAR if thresholds are met. Feed outcome back to model labels.",
                 "customerName": "Omar Haddad",
@@ -115,6 +129,8 @@ SEED_BOARD = BoardData.model_validate(
             },
             "card-8": {
                 "id": "card-8",
+                "alertType": "Card fraud",
+                "risk": "low",
                 "title": "False positive - release hold",
                 "details": "Release funds, notify customer, and record reason code to tune the triggering rule.",
                 "customerName": "Sofia Alvarez",

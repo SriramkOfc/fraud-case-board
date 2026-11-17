@@ -88,6 +88,8 @@ Stored in `data.cards`, an object keyed by card id.
 | `id` | string | same as its key, e.g. `card-1` or `card-x7k2m9lq3` |
 | `title` | string | required, non-empty |
 | `details` | string | analyst notes |
+| `alertType` | string | one of Card fraud, Account takeover, Scam (APP), Identity fraud, Money mule, First-party fraud |
+| `risk` | string | low, medium, high or critical |
 | `customerName` | string | required, non-empty |
 | `accountLast4` | string | exactly 4 digits. Only the last 4 digits are stored, never the full account number (common card-data practice, PCI) |
 | `amount` | number | amount at risk in USD, >= 0 |
@@ -100,6 +102,10 @@ Timestamps are set by whoever changes the case (the frontend today). Reordering 
 A card does not store which stage it is in. Its stage is whichever column lists its id in `cardIds`.
 
 **Archiving.** Cases are archived instead of deleted. An archived case keeps its place in its column's `cardIds` (so restoring returns it to the same stage and position) and only gets `archivedAt` set. The board hides archived cases; the Archived page lists them. Permanent deletion is only offered from the Archived page.
+
+### Events (audit trail)
+
+`events` is an append-only SQL table, one row per change to a case: `card_id`, the case `title` at that time, `actor` (`analyst`, or `ai` for an AI proposal the analyst applied), `action`, a readable `detail` (for example "Moved from Review to Investigation" or "Changed risk medium to critical"), and `at` (ISO 8601 UTC). Rows are never updated or deleted, so a permanently deleted case keeps its history. `GET /api/users/{username}/cards/{card_id}/history` returns a case's events, newest first.
 
 ## 4. Ordering strategy
 
@@ -131,7 +137,9 @@ Because the whole board is saved at once, a move never leaves half-updated posit
 | First sign in for a username | create the `users` row and a `boards` row seeded with the five stages and the sample fraud cases |
 | Board loads | read `boards.data` for the user, return it as JSON |
 | Any change in the UI | frontend sends the whole updated board; backend validates and overwrites `boards.data` |
-| AI updates cases | AI returns a whole board; backend validates it the same way, rejects it if any case was removed, sets timestamps by comparing with the stored board, then saves it (HTTP 502 and nothing saved if invalid) |
+| AI proposes changes | AI returns a whole board; backend validates it the same way, rejects it if any case was removed, sets timestamps by comparing with the stored board, and returns it with a list of changes. Nothing is saved (HTTP 502 if invalid) |
+| Analyst applies an AI proposal | frontend saves the proposed board with `?actor=ai`, only if the board has not changed since the proposal |
+| Every save | in the same transaction, the backend compares the stored board with the new one and appends one `events` row per change to a case (created, edited, moved, archived, restored, deleted) with the actor (`analyst` or `ai`) and time. The first save of a board is its baseline and logs nothing |
 
 ## 6. Validation
 

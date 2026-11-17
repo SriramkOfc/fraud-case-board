@@ -3,7 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { BoardPage } from "@/components/BoardPage";
 import { mockBackend } from "@/test/mockBackend";
 
-const lastSavedBoard = (fetchMock: ReturnType<typeof mockBackend>) => {
+// Saves are queued, so let them reach fetch first
+const lastSavedBoard = async (fetchMock: ReturnType<typeof mockBackend>) => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
   const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
   return JSON.parse(puts.at(-1)![1]!.body as string);
 };
@@ -24,8 +26,10 @@ describe("BoardPage", () => {
     await userEvent.clear(input);
     await userEvent.type(input, "Triage");
 
-    const saved = lastSavedBoard(fetchMock);
+    const saved = await lastSavedBoard(fetchMock);
     expect(saved.columns[1].title).toBe("Triage");
+    const puts = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
+    expect(puts.every(([url]) => url === "/api/users/user/board?actor=analyst")).toBe(true);
     expect(Object.keys(saved.cards)).toHaveLength(8);
   });
 
@@ -38,14 +42,18 @@ describe("BoardPage", () => {
     await userEvent.type(within(screen.getByRole("dialog")).getByLabelText("Customer name"), "Ava Chen");
     await userEvent.type(within(screen.getByRole("dialog")).getByLabelText("Account last 4 digits"), "9921");
     await userEvent.type(within(screen.getByRole("dialog")).getByLabelText("Amount at risk"), "1500.5");
+    await userEvent.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Alert type"), "Money mule");
+    await userEvent.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Risk"), "high");
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /add card/i }));
-    let saved = lastSavedBoard(fetchMock);
+    let saved = (await lastSavedBoard(fetchMock));
     const newId = saved.columns[0].cardIds.at(-1);
     expect(saved.cards[newId]).toMatchObject({
       title: "Chargeback spike",
       customerName: "Ava Chen",
       accountLast4: "9921",
       amount: 1500.5,
+      alertType: "Money mule",
+      risk: "high",
     });
     expect(saved.cards[newId].createdAt).toBe(saved.cards[newId].updatedAt);
 
@@ -56,7 +64,7 @@ describe("BoardPage", () => {
     await userEvent.type(within(dialog).getByLabelText("Case title"), "Escalated");
     await userEvent.click(within(dialog).getByRole("button", { name: /save/i }));
     await userEvent.click(within(dialog).getByRole("button", { name: /close/i }));
-    const edited = lastSavedBoard(fetchMock).cards["card-1"];
+    const edited = (await lastSavedBoard(fetchMock)).cards["card-1"];
     expect(edited.title).toBe("Escalated");
     expect(edited.customerName).toBe("Daniel Okafor");
     expect(edited.createdAt).toBe("2026-11-16T08:42:00Z");
@@ -64,7 +72,7 @@ describe("BoardPage", () => {
 
     await userEvent.click(within(screen.getByTestId("card-card-2")).getByRole("heading"));
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /archive case/i }));
-    saved = lastSavedBoard(fetchMock);
+    saved = (await lastSavedBoard(fetchMock));
     expect(saved.cards["card-2"].archivedAt).toBeTruthy();
     expect(saved.columns[0].cardIds).toContain("card-2");
 
@@ -72,7 +80,7 @@ describe("BoardPage", () => {
     const row = screen.getByTestId("archived-card-2");
     await userEvent.click(within(row).getByRole("button", { name: /delete permanently/i }));
     await userEvent.click(within(row).getByRole("button", { name: /confirm delete/i }));
-    saved = lastSavedBoard(fetchMock);
+    saved = (await lastSavedBoard(fetchMock));
     expect(saved.cards["card-2"]).toBeUndefined();
     expect(saved.columns[0].cardIds).not.toContain("card-2");
   });

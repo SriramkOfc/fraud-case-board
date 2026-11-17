@@ -1,9 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CaseForm } from "@/components/CaseForm";
 import { Modal } from "@/components/Modal";
+import { RiskBadge } from "@/components/RiskBadge";
+import { getHistory, type AuditEvent } from "@/lib/api";
 import { formatAmount, formatDate, type Card, type CaseInput } from "@/lib/kanban";
 
 type CaseDialogProps = {
+  username: string;
   card: Card;
   stageTitle: string;
   onClose: () => void;
@@ -20,8 +23,16 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   </div>
 );
 
-export const CaseDialog = ({ card, stageTitle, onClose, onEdit, onArchive }: CaseDialogProps) => {
+const actorLabel = { analyst: "Analyst", ai: "AI, approved by analyst" };
+
+export const CaseDialog = ({ username, card, stageTitle, onClose, onEdit, onArchive }: CaseDialogProps) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [history, setHistory] = useState<AuditEvent[] | null>(null);
+
+  // Reload after every change to the case (saves finish before the history is read)
+  useEffect(() => {
+    getHistory(username, card.id).then(setHistory);
+  }, [username, card.id, card.updatedAt]);
 
   return (
     <Modal eyebrow={stageTitle} title={card.title} onClose={onClose}>
@@ -38,6 +49,10 @@ export const CaseDialog = ({ card, stageTitle, onClose, onEdit, onArchive }: Cas
       ) : (
         <>
           <dl className="grid grid-cols-2 gap-4">
+            <Field label="Alert type">{card.alertType}</Field>
+            <Field label="Risk">
+              <RiskBadge risk={card.risk} />
+            </Field>
             <Field label="Customer">{card.customerName}</Field>
             <Field label="Account">&bull;&bull;&bull;&bull; {card.accountLast4}</Field>
             <Field label="Amount at risk">
@@ -54,6 +69,26 @@ export const CaseDialog = ({ card, stageTitle, onClose, onEdit, onArchive }: Cas
             <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--gray-text)]">
               {card.details || "No notes yet."}
             </p>
+          </div>
+          <div className="mt-6">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--gray-text)]">
+              Audit trail
+            </p>
+            {history && history.length === 0 && (
+              <p className="mt-1 text-sm text-[var(--gray-text)]">No changes since the case was opened.</p>
+            )}
+            {history && history.length > 0 && (
+              <ol aria-label="Audit trail" className="mt-2 max-h-40 space-y-2 overflow-y-auto border-l-2 border-[var(--stroke)] pl-3">
+                {history.map((event, index) => (
+                  <li key={index} className="text-sm leading-5">
+                    <p className="text-[var(--navy-dark)]">{event.detail}</p>
+                    <p className="text-xs text-[var(--gray-text)]">
+                      {actorLabel[event.actor]} &middot; {formatDate(event.at)}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            )}
           </div>
           <div className="mt-8 flex items-center gap-2">
             <button
